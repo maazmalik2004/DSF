@@ -8,48 +8,35 @@ import split2 from 'split2'
 class Hyperswarm {
   constructor(hyperswarm) {
     this.emitter = new EventEmitter();
-    console.log("[emitter set]")
 
-    //32 bytes topic
+    //32 bytes topic (256 bits)
     this.topic = crypto.createHash("sha256").update(hyperswarm.topic).digest();
-    console.log("[topic set] ", this.topic)
 
     this.identityKeyMapping = new Map();
     this.keySocketMapping = new Map();
 
     this.swarm = new HS();
-    console.log("[swarm set]")
 
     this.swarm.join(this.topic, {
       announce: true,
       lookup: true
     });
-    console.log("[swarm joined topic]")
 
-    console.log("[swarm.keyPair]",this.swarm.keyPair.publicKey.toString("utf-8"));
+    this.swarm.on("connection", (socket, info) => {
+      const key = socket.remotePublicKey.toString("hex")
 
-    this.swarm.on("connection", (socket,info) => {
-
-      console.log("info object ",info);
       /*
       HELLO PROTOCOL
       once connection is establshed, each peer will send a hello message to the other peer 
       indicating their identitity along with their public key so that mapping can be established
       */
-
-      //sending HELLO message once connection is established
       const helloMessage = {
         label: "HELLO",
         identity: hyperswarm.identity,
         key: this.swarm.keyPair.publicKey.toString("hex")
       }
-
-      console.log("sending hello message");
       socket.write(JSON.stringify(helloMessage) + "\n")
-      console.log("hello message sent");
-
-      const key = socket.remotePublicKey.toString("hex")
-
+      //removing existing socket connections and registering the new socket connection to this peer with key key
       if (this.keySocketMapping.has(key)) {
         //get the existing socket
         let mappedSocket = this.keySocketMapping.get(key);
@@ -58,71 +45,86 @@ class Hyperswarm {
         //delete the existing socket
         this.keySocketMapping.delete(key);
       }
-
       //add the new key socket pair
       this.keySocketMapping.set(key, socket);
 
       socket.pipe(split2(JSON.parse))
-      .on("data",(message)=>{
+        .on("data", (message) => {
 
-        if(message.label == "HELLO"){
-          this.identityKeyMapping.set(message.identity.id, message.key);
-        }
+          if (message.label == "HELLO") {
+            console.log("[Hyperswarm/socket.on(data)] received HELLO ", message);
+            this.identityKeyMapping.set(message.identity.id, message.key);
 
-        // if(message.label == "HELLO-ACK"){
-        //   this.emitter.emit("connected", message.identity)
-        // }
+            const helloAckMessage = {
+              label: "HELLO-ACK",
+              identity: hyperswarm.identity,
+              key: this.swarm.keyPair.publicKey.toString("hex")
+            }
+            socket.write(JSON.stringify(helloAckMessage) + "\n")
+            return;
+          }
 
-        this.emitter.emit("received", message)
+          if (message.label == "HELLO-ACK") {
+            console.log("[Hyperswarm/socket.on(data)] received HELLO-ACK ", message);
+            this.identityKeyMapping.set(message.identity.id, message.key);
+            //connected only when HELLO acknowledgement is received
+            this.emitter.emit("connected", message.identity);
+            return;
+          }
+
+          this.emitter.emit("received", message)
+        });
+
+      socket.on("error", (error) => {
+        this.emitter.emit("error", new Error("[Hyperswarm/socket.on(error)] socket error.",{
+          cause:error
+        }))
       });
-
-      this.emitter.emit("connected", key)
 
       socket.on("close", () => {
-        console.log("socket closed ",key)
         //delete the key socket mapping
         this.keySocketMapping.delete(key);
-      });
+        this.emitter.emit("disconnected");
 
-      socket.on("error", () => {
-        console.log("socket error ",key)
-        //destroy the socket
-        socket.destroy();
-        // delete the key socket mapping
-        this.keySocketMapping.delete(key);
+        //attempting reconnection
+        // console.log("attempting reconnection")
+        // this.swarm.join(this.topic, { announce: true, lookup: true });
+        // this.swarm.flush().catch(() => {});
       });
-
     });
   }
 
   send(message) {
-    console.log("send() request received",message)
+    if (!message.receiver) {
+      this.emitter.emit("error", new Error("[Hyperswarm/send(message)] invalid message format. receiver not specified."))
+    }
     let receiver = message.receiver;
-
     let receiverKey = this.identityKeyMapping.get(receiver);
-    if(!receiverKey){
-      console.log("no receiver key found")
+    if (!receiverKey) {
+      this.identityKeyMapping.delete(receiver);
+      this.emitter.emit("error", new Error("[Hyperswarm/send(message)] receiver key not found."))
       return
     }
     let receiverSocket = this.keySocketMapping.get(receiverKey);
-    if(!receiverSocket){
-      console.log("no receiver socket found")
+    if (!receiverSocket) {
+      this.keySocketMapping.delete(receiverKey);
+      this.emitter.emit("error", new Error("[Hyperswarm/send(message)] receiver socket not found."))
       return;
     }
-
+    //if the socket exists but is in a destroyed state
     if (receiverSocket.destroyed) {
-      console.log("receiver socket is destroyed")
       this.identityKeyMapping.delete(receiver);
       this.keySocketMapping.delete(receiverKey);
+      this.emitter.emit("error", new Error("[Hyperswarm/(message)] receiver socket is in destroyed state"))
       return
     }
 
     receiverSocket.write(JSON.stringify(message) + "\n");
-    console.log("[send()] message sent ")
+    this.emitter.emit("sent", message);
   }
 
-  on(eventName, cb) {
-    this.emitter.on(eventName, cb);
+  on(eventName, callback) {
+    this.emitter.on(eventName, callback);
   }
 }
 
