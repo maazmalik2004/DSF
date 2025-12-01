@@ -143,6 +143,13 @@ class Router {
 
                     let pendingMessages = this.targetPendingMessagesMapping.get(message.trace[i]) || [];
                     for (let message of pendingMessages) {
+                        // if(message.label == "RELAY"){
+                        //     //if a relay message was added to the set of pending messages,
+                        //     //it simply means the path was broken
+                        //     //we must rediscover a new path, and forward the relay message with the new path in mind
+                        //     return;
+                        // }
+                        
                         message.source = this.identity.id;
                         message.target = message.receiver;
 
@@ -168,6 +175,11 @@ class Router {
                 message.sender = this.identity.id;
                 message.nextHopIndex = message.nextHopIndex - 1;
                 message.receiver = message.trace[message.nextHopIndex];
+
+                //if next hop is not possible, simply drop the message
+                if(!this.neighbours.has(message.receiver)){
+                    return;
+                }
 
                 this.messagingAdapter.enqueue(message);
                 console.log("[ROUTER] RELAYED RETRACE MESSAGE", message)
@@ -196,6 +208,11 @@ class Router {
                     message.sender = this.identity.id;
                     message.nextHopIndex = message.nextHopIndex + 1;
                     message.receiver = message.trace[message.nextHopIndex]
+                }
+
+                //if next hop is not possible, simply drop the message
+                if(!this.neighbours.has(message.receiver)){
+                    return;
                 }
 
                 console.log("[ROUTER] RELAYING RELAY MESSAGE ", message);
