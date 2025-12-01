@@ -23,6 +23,7 @@ class Hyperswarm {
     });
 
     this.swarm.on("connection", (socket, info) => {
+      let othersIdentity = null;
       const key = socket.remotePublicKey.toString("hex")
 
       /*
@@ -54,6 +55,7 @@ class Hyperswarm {
           if (message.label == "HELLO") {
             console.log("[Hyperswarm/socket.on(data)] received HELLO ", message);
             this.identityKeyMapping.set(message.identity.id, message.key);
+            othersIdentity = message.identity;
 
             const helloAckMessage = {
               label: "HELLO-ACK",
@@ -67,6 +69,7 @@ class Hyperswarm {
           if (message.label == "HELLO-ACK") {
             console.log("[Hyperswarm/socket.on(data)] received HELLO-ACK ", message);
             this.identityKeyMapping.set(message.identity.id, message.key);
+            othersIdentity = message.identity
             //connected only when HELLO acknowledgement is received
             this.emitter.emit("connected", message.identity);
             return;
@@ -76,6 +79,11 @@ class Hyperswarm {
         });
 
       socket.on("error", (error) => {
+        if(error.code == "ETIMEDOUT"){
+          this.keySocketMapping.delete(key);
+          this.emitter.emit("disconnected",othersIdentity);
+          return;
+        }
         this.emitter.emit("error", new Error("[Hyperswarm/socket.on(error)] socket error.",{
           cause:error
         }))
@@ -84,14 +92,11 @@ class Hyperswarm {
       socket.on("close", () => {
         //delete the key socket mapping
         this.keySocketMapping.delete(key);
-        this.emitter.emit("disconnected");
-
-        //attempting reconnection
-        // console.log("attempting reconnection")
-        // this.swarm.join(this.topic, { announce: true, lookup: true });
-        // this.swarm.flush().catch(() => {});
+        this.emitter.emit("disconnected",othersIdentity);
       });
     });
+
+    console.log("[Hyperswarm] communication online")
   }
 
   send(message) {
@@ -116,6 +121,9 @@ class Hyperswarm {
       this.identityKeyMapping.delete(receiver);
       this.keySocketMapping.delete(receiverKey);
       this.emitter.emit("error", new Error("[Hyperswarm/(message)] receiver socket is in destroyed state"))
+      this.emitter.emit("disconnected",{
+        id:receiver
+      });
       return
     }
 

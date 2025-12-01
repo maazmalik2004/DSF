@@ -42,9 +42,9 @@ queue.on("connected", (identity) => {
     console.log("[CONNECTED]", identity);
 });
 
-// queue.on("disconnected", (identity) => {
-//     console.log("[DISCONNECTED]", identity);
-// });
+queue.on("disconnected", (identity) => {
+    console.log("[DISCONNECTED]", identity);
+});
 
 // queue.on("outgoingQueued", (message) => {
 //     console.log("[OUTGOING-QUEUED]", message);

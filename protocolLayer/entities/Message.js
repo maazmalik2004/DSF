@@ -3,9 +3,12 @@ import { ulid } from "ulid";
 class Message {
     constructor(message){
         this.message = message
-
+        
+        this.label = "MESSAGE";
+        
         this.message.id = ulid();
         this.message.timestamp = Date.now();
+        
         this.sender = message.sender;
         this.receiver = message.receiver;
         this.content = message.content;
