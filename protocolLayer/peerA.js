@@ -5,6 +5,9 @@ import {
     ulid
 } from "ulid";
 
+import fs from "fs";
+let topology = JSON.parse(fs.readFileSync("./protocolLayer/topology.json","utf-8"));
+
 let identity = {
     id: "A",
     name: "someNameA"
@@ -12,8 +15,8 @@ let identity = {
 
 let communication = new Hyperswarm({
     topic: "maaz",
-    identity: identity
-
+    identity: identity,
+    allowedNeighbours:topology[identity.id]
 });
 
 let queue = new Queue({
@@ -46,7 +49,7 @@ router.on("connected", (identity) => {
     router.relayNoPath({
                 id : ulid(),
                 sender: "A",
-                receiver: "E",
+                receiver: "F",
             })
 });
 

@@ -2,6 +2,9 @@ import Hyperswarm from "../messagingLayer/communication/communicationAdapters/hy
 import Queue from "../messagingLayer/queuing/queuingAdapters/queue.js";
 import Router from "./routing/routing.js";
 
+import fs from "fs";
+let topology = JSON.parse(fs.readFileSync("./protocolLayer/topology.json","utf-8"));
+
 let identity = {
     id: "E",
     name: "someNameE"
@@ -9,7 +12,8 @@ let identity = {
 
 let communication = new Hyperswarm({
     topic: "maaz",
-    identity: identity
+    identity: identity,
+    allowedNeighbours:topology[identity.id]
 
 });
 

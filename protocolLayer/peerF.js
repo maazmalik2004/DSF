@@ -6,8 +6,8 @@ import fs from "fs";
 let topology = JSON.parse(fs.readFileSync("./protocolLayer/topology.json","utf-8"));
 
 let identity = {
-    id: "B",
-    name: "someNameB"
+    id: "F",
+    name: "someNameF"
 };
 
 let communication = new Hyperswarm({

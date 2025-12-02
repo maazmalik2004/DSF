@@ -9,6 +9,8 @@ class Hyperswarm {
   constructor(hyperswarm) {
     this.emitter = new EventEmitter();
 
+    this.allowedNeighbours = hyperswarm.allowedNeighbours;
+
     //32 bytes topic (256 bits)
     this.topic = crypto.createHash("sha256").update(hyperswarm.topic).digest();
 
@@ -31,6 +33,7 @@ class Hyperswarm {
       once connection is establshed, each peer will send a hello message to the other peer 
       indicating their identitity along with their public key so that mapping can be established
       */
+
       const helloMessage = {
         label: "HELLO",
         identity: hyperswarm.identity,
@@ -53,7 +56,14 @@ class Hyperswarm {
         .on("data", (message) => {
 
           if (message.label == "HELLO") {
+            //if we receive an hello from someone we dont want to connect to, we return;
+            if(!this.allowedNeighbours.includes(message.identity.id)){
+              console.log("[Hyperswarm] disallowed ",message.identity.id);
+              return;
+            }
+
             console.log("[Hyperswarm/socket.on(data)] received HELLO ", message);
+
             this.identityKeyMapping.set(message.identity.id, message.key);
             othersIdentity = message.identity;
 
@@ -71,6 +81,7 @@ class Hyperswarm {
             this.identityKeyMapping.set(message.identity.id, message.key);
             othersIdentity = message.identity
             //connected only when HELLO acknowledgement is received
+            
             this.emitter.emit("connected", message.identity);
             return;
           }
@@ -81,6 +92,10 @@ class Hyperswarm {
       socket.on("error", (error) => {
         if(error.code == "ETIMEDOUT"){
           this.keySocketMapping.delete(key);
+
+          if(!this.allowedNeighbours.includes(othersIdentity.identity)){
+            return;
+          }
           this.emitter.emit("disconnected",othersIdentity);
           return;
         }
@@ -92,6 +107,9 @@ class Hyperswarm {
       socket.on("close", () => {
         //delete the key socket mapping
         this.keySocketMapping.delete(key);
+        if(!this.allowedNeighbours.includes(othersIdentity.identity)){
+            return;
+          }
         this.emitter.emit("disconnected",othersIdentity);
       });
     });
@@ -121,6 +139,9 @@ class Hyperswarm {
       this.identityKeyMapping.delete(receiver);
       this.keySocketMapping.delete(receiverKey);
       this.emitter.emit("error", new Error("[Hyperswarm/(message)] receiver socket is in destroyed state"))
+      if(!this.allowedNeighbours.includes(receiver)){
+            return;
+          }
       this.emitter.emit("disconnected",{
         id:receiver
       });
