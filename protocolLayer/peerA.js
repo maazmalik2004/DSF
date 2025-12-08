@@ -16,7 +16,7 @@ let identity = {
 let communication = new Hyperswarm({
     topic: "maaz",
     identity: identity,
-    allowedNeighbours:topology[identity.id]
+    timeout:1000
 });
 
 let queue = new Queue({
@@ -25,32 +25,12 @@ let queue = new Queue({
 
 let router = new Router({
     identity:identity,
-    messagingAdapter: queue
+    messagingAdapter: queue,
+    allowedNeighbours:topology[identity.id]
 })
-
-let once = false;
 
 router.on("connected", (identity) => {
     console.log("[CONNECTED]", identity);
-    if(once == true)return;
-    // setTimeout(()=>{
-    //     once = true
-    //     console.log("tracing")
-    //     router.trace("E");
-    //     setTimeout(()=>{
-    //         router.relay({
-    //             id : ulid(),
-    //             sender: "A",
-    //             receiver: "E",
-    //         })
-    //     },20000)
-    // },100)
-
-    router.relayNoPath({
-                id : ulid(),
-                sender: "A",
-                receiver: "F",
-            })
 });
 
 router.on("disconnected", (identity) => {
@@ -60,3 +40,16 @@ router.on("disconnected", (identity) => {
 router.on("error", (error) => {
     console.log("[ERROR]", error);
 });
+
+router.on("dropped",message => {
+    console.log("[DROPPED] ",message)
+})
+
+
+setInterval(()=>{
+    router.send({
+                id : ulid(),
+                sender: "A",
+                receiver: "F",
+            })
+},10000)

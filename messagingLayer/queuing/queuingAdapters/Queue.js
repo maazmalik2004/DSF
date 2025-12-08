@@ -13,6 +13,11 @@ class Queue{
             this.emitter.emit("sent", message);
         })
 
+        this.communicationAdapter.on("dropped",(message)=>{
+            console.log("[QUEUE] dropped in queue")
+            this.emitter.emit("dropped", message);
+        })
+
         // incoming producer
         this.communicationAdapter.on("received",(message)=>{
             this.emitter.emit("received",message);

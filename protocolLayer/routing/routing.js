@@ -23,16 +23,21 @@ class Router {
         this.neighbours = new Map();
         this.traces = new Set();
         this.targetPathMapping = new Map();
+        // this.allowedNeighbours = object.allowedNeighbours;
 
         this.targetPendingMessagesMapping = new Map();
 
         this.messagingAdapter.on("connected", (identity) => {
+            // if(!this.allowedNeighbours.includes(identity.id))return;
+            
             this.neighbours.set(identity.id, identity);
             this.emitter.emit("connected", identity);
             say.speak(`${this.identity.id} connected to ${identity.id}`)
         })
 
         this.messagingAdapter.on("disconnected", (identity) => {
+            // if(!this.allowedNeighbours.includes(identity.id))return;
+
             this.neighbours.delete(identity.id);
             this.emitter.emit("disconnected", identity);
         })
@@ -223,6 +228,24 @@ class Router {
             this.emitter.emit("received", message);
         });
 
+        this.messagingAdapter.on("dropped",message => {
+            //if the next hop is the target peer and the target peer is disconnected, we simply drop the message
+            if(message.receiver == message.target){
+                //we must assume the worst, that the target has died, and hence drop the message
+                this.emitter.emit("dropped",message);
+                return;
+            }
+
+            //if the dropped message is a relay message, we must rediscover a new path
+            let currentPendingList = this.targetPendingMessagesMapping.get(message.receiver) || [];
+            this.targetPendingMessagesMapping.set(message.receiver, [...currentPendingList, message]);
+
+            //we trigger a trace
+            this.trace(message.receiver)
+
+            this.emitter.emit("[ROUTER] dropped message ",message)
+        })
+
         console.log("[ROUTER] router online")
     }
 
@@ -248,40 +271,39 @@ class Router {
         }
     }
 
-    relayNoPath(message) {
-        //assuming no path exists
-        if (!this.targetPathMapping.has(message.receiver)) {
+    relay(message){
+        //case 1 path doesnt exist
+        if(!this.targetPathMapping.has(message.receiver)){
             console.log("[ROUTER] path not found ", message);
+
             let currentPendingList = this.targetPendingMessagesMapping.get(message.receiver) || [];
             this.targetPendingMessagesMapping.set(message.receiver, [...currentPendingList, message]);
 
-            //initiate trace
             console.log("[ROUTER] INITIATING TRACE");
-            let traceId = ulid();
-            for (let id of this.neighbours.keys()) {
+            this.trace(message.receiver)
+            // let traceId = ulid();
+            // for (let id of this.neighbours.keys()) {
 
-                let traceMessage = {
-                    label: "TRACE",
-                    id: traceId,
-                    sender: this.identity.id,
-                    receiver: id,
-                    source: this.identity.id,
-                    target: message.receiver,
-                    trace: [this.identity.id]
-                }
+            //     let traceMessage = {
+            //         label: "TRACE",
+            //         id: traceId,
+            //         sender: this.identity.id,
+            //         receiver: id,
+            //         source: this.identity.id,
+            //         target: message.receiver,
+            //         trace: [this.identity.id]
+            //     }
 
-                this.traces.add(traceId)
+            //     this.traces.add(traceId)
 
-                console.log("[ROUTER] BROADCASTING TRACE", traceMessage);
+            //     console.log("[ROUTER] BROADCASTING TRACE", traceMessage);
 
-                this.messagingAdapter.enqueue(traceMessage);
-            }
+            //     this.messagingAdapter.enqueue(traceMessage);
+
+            return;
         }
-    }
 
-    /*
-    relay(message) {
-        //assuming path exists initially
+
         let path = this.targetPathMapping.get(message.receiver);
 
         message.source = this.identity.id;
@@ -298,34 +320,37 @@ class Router {
         this.messagingAdapter.enqueue(message);
     }
 
-      send(message) {
-        //if the receiver is a neighbour, send directly
-        if (this.neighbours.has(message.receiver)) {
-          console.log("[ROUTER/send(message)] sending directly to neighbour")
-          this.messagingAdapter.enqueue(message);
-        }
+    send(message){
+        this.relay(message)
+    }
 
-        //if the path is already mapped out
-        if (this.idPathMapping.has(message.receiver)) {
-          //relay message via that path, implementation pending
-          console.log("[ROUTER] path found ", this.idPathMapping.get(message.receiver))
-        }
+    //   send(message) {
+    //     //if the receiver is a neighbour, send directly
+    //     if (this.neighbours.has(message.receiver)) {
+    //       console.log("[ROUTER/send(message)] sending directly to neighbour")
+    //       this.messagingAdapter.enqueue(message);
+    //     }
 
-        //trigger a trace
-        for (let id of this.neighbours.keys()) {
-          let traceMessage = {
-            label: "TRACE",
-            id: message.id,
-            sender: this.identity.id,
-            receiver: id,
-            source: this.identity.id,
-            target: message.receiver
-          }
+    //     //if the path is already mapped out
+    //     if (this.idPathMapping.has(message.receiver)) {
+    //       //relay message via that path, implementation pending
+    //       console.log("[ROUTER] path found ", this.idPathMapping.get(message.receiver))
+    //     }
 
-          this.messagingAdapter.enqueue(message);
-        }
-      }
-    */
+    //     //trigger a trace
+    //     for (let id of this.neighbours.keys()) {
+    //       let traceMessage = {
+    //         label: "TRACE",
+    //         id: message.id,
+    //         sender: this.identity.id,
+    //         receiver: id,
+    //         source: this.identity.id,
+    //         target: message.receiver
+    //       }
+
+    //       this.messagingAdapter.enqueue(message);
+    //     }
+    //   }
 
     on(eventName, callback) {
         this.emitter.on(eventName, callback);
