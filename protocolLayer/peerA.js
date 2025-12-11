@@ -16,7 +16,8 @@ let identity = {
 let communication = new Hyperswarm({
     topic: "maaz",
     identity: identity,
-    timeout:1000
+    timeout:1000,
+    allowedNeighbours:topology[identity.id]
 });
 
 let queue = new Queue({
@@ -25,8 +26,7 @@ let queue = new Queue({
 
 let router = new Router({
     identity:identity,
-    messagingAdapter: queue,
-    allowedNeighbours:topology[identity.id]
+    messagingAdapter: queue
 })
 
 router.on("connected", (identity) => {

@@ -13,8 +13,8 @@ let identity = {
 let communication = new Hyperswarm({
     topic: "maaz",
     identity: identity,
+    timeout:1000,
     allowedNeighbours:topology[identity.id]
-
 });
 
 let queue = new Queue({

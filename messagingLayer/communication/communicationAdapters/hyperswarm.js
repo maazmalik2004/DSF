@@ -24,6 +24,8 @@ class Hyperswarm {
         //unacknowledged messages
         this.unacknowledgedMessages = new Map();
 
+        this.allowedNeighbours = new Set([...object.allowedNeighbours])
+
         this.swarm = new HS();
 
         this.swarm.join(this.topic, {
@@ -78,6 +80,9 @@ class Hyperswarm {
                         this.idIdentityMapping.set(message.identity.id, message.identity);
                         othersIdentity = message.identity
 
+                        //limiting connections based on topology
+                        if(!this.allowedNeighbours.has(message.identity.id))return;
+
                         //connected only when HELLO-ACK is received
                         this.emitter.emit("connected", message.identity);
                         return;
@@ -104,11 +109,11 @@ class Hyperswarm {
                 });
 
             socket.on("error", (error) => {
-                if (error.code == "ETIMEDOUT") {
-                    console.log("[Hyperswarm] disconnect due to ETIMEDOUT")
-                    this.disconnect(othersIdentity.id);
-                    return;
-                }
+                // if (error.code == "ETIMEDOUT") {
+                //     console.log("[Hyperswarm] disconnect due to ETIMEDOUT")
+                //     this.disconnect(othersIdentity.id);
+                //     return;
+                // }
                 this.emitter.emit("error", new Error("[Hyperswarm] socket error.", error))
             });
 
@@ -133,6 +138,8 @@ class Hyperswarm {
                 this.keySocketMapping.delete(key);
                 if (socket) {
                     socket.destroy();
+                    //limiting connections based on topology
+                    if(!this.allowedNeighbours.has(id))return;
                     this.emitter.emit("disconnected", this.idIdentityMapping.get(id));
                 }
             }
