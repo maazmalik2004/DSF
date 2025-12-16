@@ -1,5 +1,7 @@
 import Hyperswarm from "../messagingLayer/communication/communicationAdapters/hyperswarm.js";
-import Queue from "../messagingLayer/queuing/queuingAdapters/queue.js";
+import Queue from "../messagingLayer/queuing/queuingAdapters/byassQueue.js";
+// import Queue from "../messagingLayer/queuing/queuingAdapters/queue.js";
+
 import Router from "./routing/routing.js";
 import {
     ulid
@@ -13,16 +15,18 @@ let identity = {
     name: "someNameA"
 };
 
+let reachablePeers = new Set();
+
 let communication = new Hyperswarm({
     topic: "maaz",
     identity: identity,
-    timeout:1000,
     allowedNeighbours:topology[identity.id]
 });
 
 let queue = new Queue({
     communicationAdapter: communication
 });
+
 
 let router = new Router({
     identity:identity,
@@ -45,11 +49,20 @@ router.on("dropped",message => {
     console.log("[DROPPED] ",message)
 })
 
+router.on("reachable",id => {
+    reachablePeers.add(id)
+    console.log("[REACHABLE] ",id)
+})
+
+router.on("unreachable",id => {
+    console.log("[UNREACHABLE] ",id)
+})
 
 setInterval(()=>{
+    // if(!reachablePeers.has("F"))return;
     router.send({
                 id : ulid(),
                 sender: "A",
                 receiver: "F",
             })
-},10000)
+},30000)

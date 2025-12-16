@@ -9,7 +9,7 @@ class Hyperswarm {
     constructor(object) {
         this.emitter = new EventEmitter();
 
-        this.timeout = object.timeout || 3000;
+        this.timeout = object.timeout || 1000;
 
         //32 bytes topic (256 bits)
         this.topic = crypto.createHash("sha256").update(object.topic).digest();
@@ -109,11 +109,11 @@ class Hyperswarm {
                 });
 
             socket.on("error", (error) => {
-                // if (error.code == "ETIMEDOUT") {
-                //     console.log("[Hyperswarm] disconnect due to ETIMEDOUT")
-                //     this.disconnect(othersIdentity.id);
-                //     return;
-                // }
+                if (error.code == "ETIMEDOUT") {
+                    console.log("[Hyperswarm] disconnect due to ETIMEDOUT")
+                    this.disconnect(othersIdentity.id);
+                    return;
+                }
                 this.emitter.emit("error", new Error("[Hyperswarm] socket error.", error))
             });
 
