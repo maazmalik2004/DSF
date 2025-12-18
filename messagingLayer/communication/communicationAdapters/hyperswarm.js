@@ -9,7 +9,7 @@ class Hyperswarm {
     constructor(object) {
         this.emitter = new EventEmitter();
 
-        this.timeout = object.timeout || 1000;
+        this.timeout = object.timeout || 5000;
 
         //32 bytes topic (256 bits)
         this.topic = crypto.createHash("sha256").update(object.topic).digest();
@@ -35,10 +35,10 @@ class Hyperswarm {
 
         this.swarm.on("connection", (socket, info) => {
             const key = socket.remotePublicKey.toString("hex")
-            if (this.keySocketMapping.has(key)) {
-                let mappedSocket = this.keySocketMapping.get(key);
-                mappedSocket.destroy();
-            }
+            // if (this.keySocketMapping.has(key)) {
+            //     let mappedSocket = this.keySocketMapping.get(key);
+            //     mappedSocket.destroy();
+            // }
             this.keySocketMapping.set(key, socket);
 
             /*

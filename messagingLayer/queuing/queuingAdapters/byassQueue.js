@@ -10,7 +10,7 @@ class BypassQueue{
         })
 
         this.communicationAdapter.on("dropped",(message)=>{
-            console.log("[QUEUE] dropped in queue")
+            //console.log("[QUEUE] dropped in queue")
             this.emitter.emit("dropped", message);
         })
 
@@ -31,7 +31,7 @@ class BypassQueue{
             this.emitter.emit("error",error);
         })
 
-        console.log("[Queue] queue online")
+        //console.log("[Queue] queue online")
     }
 
     //outgoing producer

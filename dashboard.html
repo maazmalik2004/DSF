@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Network Dashboard</title>
+
+<style>
+  html, body {
+    margin: 0;
+    height: 100%;
+    overflow: hidden;
+    font-family: monospace;
+  }
+
+  /* ---------- TOP RIGHT METRIC ---------- */
+  #successRateBox {
+    position: fixed;
+    top: 8px;
+    right: 12px;
+    padding: 6px 10px;
+    background: #111;
+    color: #0f0;
+    font-weight: bold;
+    font-size: 14px;
+    border-radius: 4px;
+    z-index: 1000;
+  }
+
+  #container {
+    display: flex;
+    height: 100%;
+  }
+
+  #logs {
+    width: 40%;
+    overflow-y: auto;
+    border-right: 4px solid #333;
+  }
+
+  #divider {
+    width: 6px;
+    cursor: col-resize;
+    background: #666;
+  }
+
+  #graph-container {
+    flex: 1;
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+
+  th, td {
+    border: 1px solid #aaa;
+    padding: 4px;
+    text-align: center;
+    font-size: 12px;
+  }
+
+  th {
+    position: sticky;
+    top: 0;
+    background: #eee;
+    z-index: 1;
+  }
+</style>
+</head>
+<body>
+
+<!-- ---------- SUCCESS RATE ---------- -->
+<div id="successRateBox">
+  Success Rate: <span id="successRate">N/A</span>
+</div>
+
+<div id="container">
+
+  <div id="logs">
+    <table>
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Message ID</th>
+          <th>Source</th>
+          <th>Target</th>
+          <th>Disp</th>
+          <th>Recv</th>
+          <th>Ack</th>
+          <th>Nack</th>
+          <th>Reason</th>
+        </tr>
+      </thead>
+      <tbody id="logBody"></tbody>
+    </table>
+  </div>
+
+  <div id="divider"></div>
+
+  <div id="graph-container">
+    <svg id="graph"></svg>
+  </div>
+
+</div>
+
+<!-- ---------- STABLE SCRIPT LOADING ---------- -->
+<script src="/socket.io/socket.io.js"></script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<script>
+/* =========================================================
+   SOCKET
+========================================================= */
+
+const socket = io();
+
+/* =========================================================
+   AUTOSCROLL (LOGS)
+========================================================= */
+
+const logsPanel = document.getElementById("logs");
+let autoScrollEnabled = true;
+
+function isNearBottom(el, threshold = 20) {
+  return el.scrollTop + el.clientHeight >= el.scrollHeight - threshold;
+}
+
+logsPanel.addEventListener("scroll", () => {
+  autoScrollEnabled = isNearBottom(logsPanel);
+});
+
+function maybeAutoScroll() {
+  if (autoScrollEnabled) {
+    logsPanel.scrollTop = logsPanel.scrollHeight;
+  }
+}
+
+/* =========================================================
+   LOG TABLE STATE
+========================================================= */
+
+const logBody = document.getElementById("logBody");
+const successRateEl = document.getElementById("successRate");
+
+const rowMap    = new Map(); // messageId -> <tr>
+const metaMap   = new Map(); // messageId -> { source, target }
+const resultMap = new Map(); // messageId -> { ack, nack }
+
+let serial = 0;
+
+function recomputeSuccessRate() {
+  let ack = 0;
+  let nack = 0;
+
+  for (const v of resultMap.values()) {
+    if (v.ack) ack++;
+    if (v.nack) nack++;
+  }
+
+  const total = ack + nack;
+  successRateEl.textContent =
+    total === 0 ? "N/A" : (ack / total).toFixed(5);
+}
+
+socket.on("logUpdate", log => {
+  let row = rowMap.get(log.messageId);
+
+  /* ----- FIRST SEEN (DISPATCH METADATA) ----- */
+  if (!row) {
+    serial++;
+
+    metaMap.set(log.messageId, {
+      source: log.source || "",
+      target: log.target || ""
+    });
+
+    resultMap.set(log.messageId, {
+      ack: false,
+      nack: false
+    });
+
+    row = document.createElement("tr");
+    row.innerHTML = `
+      <td>${serial}</td>
+      <td>${log.messageId}</td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+      <td></td>
+    `;
+
+    rowMap.set(log.messageId, row);
+    logBody.appendChild(row);
+  }
+
+  /* ----- IMMUTABLE SOURCE / TARGET ----- */
+  const meta = metaMap.get(log.messageId);
+  if (log.source && !meta.source) meta.source = log.source;
+  if (log.target && !meta.target) meta.target = log.target;
+
+  const cells = row.children;
+  cells[2].textContent = meta.source;
+  cells[3].textContent = meta.target;
+
+  /* ----- EVENT FLAGS ----- */
+  cells[4].textContent = log.dispatched ? "✔" : cells[4].textContent;
+  cells[5].textContent = log.received   ? "✔" : cells[5].textContent;
+
+  const result = resultMap.get(log.messageId);
+  if (log.ack)  result.ack  = true;
+  if (log.nack) result.nack = true;
+
+  cells[6].textContent = result.ack  ? "✔" : "";
+  cells[7].textContent = result.nack ? "✔" : "";
+  cells[8].textContent = log.reason || cells[8].textContent;
+
+  recomputeSuccessRate();
+  maybeAutoScroll();
+});
+
+/* =========================================================
+   GRAPH (WITH NODE ID LABELS)
+========================================================= */
+
+const svg = d3.select("#graph");
+const width = window.innerWidth * 0.6;
+const height = window.innerHeight;
+
+svg.attr("width", width).attr("height", height);
+
+const simulation = d3.forceSimulation()
+  .force("link", d3.forceLink().id(d => d.id).distance(80))
+  .force("charge", d3.forceManyBody().strength(-250))
+  .force("center", d3.forceCenter(width / 2, height / 2));
+
+socket.on("graphUpdate", graph => {
+  const nodes = graph.nodes.map(id => ({ id }));
+  const links = graph.edges.map(e => ({
+    source: e.source,
+    target: e.target
+  }));
+
+  svg.selectAll("*").remove();
+
+  /* ----- LINKS ----- */
+  const link = svg.append("g")
+    .selectAll("line")
+    .data(links)
+    .enter()
+    .append("line")
+    .attr("stroke", "#999")
+    .attr("stroke-width", 1.5);
+
+  /* ----- NODE GROUP (CIRCLE + LABEL) ----- */
+  const nodeGroup = svg.append("g")
+    .selectAll("g")
+    .data(nodes)
+    .enter()
+    .append("g")
+    .call(
+      d3.drag()
+        .on("start", dragStarted)
+        .on("drag", dragged)
+        .on("end", dragEnded)
+    );
+
+  nodeGroup.append("circle")
+    .attr("r", 8)
+    .attr("fill", "steelblue");
+
+  nodeGroup.append("text")
+    .text(d => d.id)
+    .attr("x", 10)
+    .attr("y", 4)
+    .attr("font-size", "11px")
+    .attr("fill", "#333")
+    .attr("pointer-events", "none");
+
+  simulation.nodes(nodes).on("tick", () => {
+    link
+      .attr("x1", d => d.source.x)
+      .attr("y1", d => d.source.y)
+      .attr("x2", d => d.target.x)
+      .attr("y2", d => d.target.y);
+
+    nodeGroup
+      .attr("transform", d => `translate(${d.x}, ${d.y})`);
+  });
+
+  simulation.force("link").links(links);
+  simulation.alpha(1).restart();
+});
+
+/* ----- DRAG HELPERS ----- */
+function dragStarted(event, d) {
+  if (!event.active) simulation.alphaTarget(0.3).restart();
+  d.fx = d.x;
+  d.fy = d.y;
+}
+
+function dragged(event, d) {
+  d.fx = event.x;
+  d.fy = event.y;
+}
+
+function dragEnded(event, d) {
+  if (!event.active) simulation.alphaTarget(0);
+  d.fx = null;
+  d.fy = null;
+}
+
+/* =========================================================
+   DIVIDER
+========================================================= */
+
+const divider = document.getElementById("divider");
+
+divider.onmousedown = () => {
+  document.onmousemove = e => {
+    logsPanel.style.width = e.clientX + "px";
+  };
+  document.onmouseup = () => {
+    document.onmousemove = null;
+  };
+};
+</script>
+
+</body>
+</html>

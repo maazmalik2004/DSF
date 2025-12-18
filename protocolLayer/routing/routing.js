@@ -24,6 +24,7 @@ class Router {
 
     this.encounteredTraces = new Set();
     this.unresolvedTraces = new Set();
+    this.unresolvedRelays = new Map();
 
     this.targetPathMapping = new Map();
     this.targetPendingMessagesMapping = new Map();
@@ -31,19 +32,27 @@ class Router {
     this.connectedPeers = new Map();
     this.reachablePeers = new Set();
 
+
     this.messagingAdapter.on("connected", (identity) => {
+      //if not already connected, it is now
+      // if(!this.connectedPeers.has(identity.id)){
+      //   this.connectedPeers.set(identity.id, identity);
+      //   this.emitter.emit("connected", identity);
+      // }
       this.connectedPeers.set(identity.id, identity);
       this.emitter.emit("connected", identity);
     })
 
     this.messagingAdapter.on("disconnected", (identity) => {
-      this.connectedPeers.delete(identity.id);
-      this.emitter.emit("disconnected", identity);
+      //if already connected, it is now not
+      // if(this.connectedPeers.has(identity.id)){
+        this.connectedPeers.delete(identity.id);
+        this.emitter.emit("disconnected", identity);
+      // }
     })
 
     this.messagingAdapter.on("sent", (message) => {
-      //this will be changed to when we receive RELAY-ACK, in the future, not now
-      this.emitter.emit("sent", message);
+      //nothing
     })
 
     this.messagingAdapter.on("error", (error) => {
@@ -80,6 +89,7 @@ class Router {
             message.receiver = path[1];
             message.trace = path;
             message.nextHopIndex = 1;
+            console.log("initiation relay during flushing during trace")
             this.messagingAdapter.enqueue(message);
           }
           this.targetPendingMessagesMapping.delete(message.trace[i]);
@@ -157,6 +167,7 @@ class Router {
             message.receiver = path[1];
             message.trace = path;
             message.nextHopIndex = 1;
+            console.log("initiation relay during flushing during retrace")
             this.messagingAdapter.enqueue(message);
           }
           this.targetPendingMessagesMapping.delete(message.trace[i]);
@@ -223,7 +234,10 @@ class Router {
 
         //reached intended target
         if (message.target == this.identity.id) {
-          this.emitter.emit("relayAck",message.id)
+          if(this.unresolvedRelays.has(message.id)){
+            this.emitter.emit("sent",this.unresolvedRelays.get(message.id))
+            this.unresolvedRelays.delete(message.id)
+          }
           return;
         }
 
@@ -258,13 +272,19 @@ class Router {
 
         //reached intended target
         if (message.target == this.identity.id) {
-          this.emitter.emit("relayNack")
+          if(this.unresolvedRelays.has(message.id)){
+            console.log("dropped due to nack")
+            let droppedMessage = this.unresolvedRelays.get(message.id)
+            droppedMessage.reason = "received RELAY-NACK message "+JSON.stringify(droppedMessage);
+            this.emitter.emit("dropped",droppedMessage)
+            this.unresolvedRelays.delete(message.id)
+          }
           return;
         }
 
         message.sender = this.identity.id;
-          message.nextHopIndex = message.nextHopIndex + 1;
-          message.receiver = message.trace[message.nextHopIndex];
+        message.nextHopIndex = message.nextHopIndex + 1;
+        message.receiver = message.trace[message.nextHopIndex];
 
         // console.log("using MREPF ",this.targetPathMapping);
         // if (this.targetPathMapping.has(message.target)) {
@@ -312,6 +332,8 @@ class Router {
         return
       }
 
+      //this is never encountered
+      message.reason = "meow"
       this.emitter.emit("dropped", message)
     })
 
@@ -340,6 +362,7 @@ class Router {
           // this.messagingAdapter.enqueue(relayNackMessage)
           this.relay(relayNackMessage)
         } else {
+          item.reason = "dropped due to invalidity of target"+JSON.stringify(item);
           this.emitter.emit("dropped", item)
         }
       }
@@ -361,7 +384,7 @@ class Router {
     setTimeout(() => {
       if (this.unresolvedTraces.has(traceId)) {
         this.unresolvedTraces.delete(traceId);
-        console.log("invalidation occured due to timeout")
+        console.log("invalidation occured due to timeout",traceId)
         this.invalidate(receiver)
       }
     }, this.timeout)
@@ -386,6 +409,7 @@ class Router {
   }
 
   relay(message) {
+    this.unresolvedRelays.set(message.id, message);
     message.label = message.label || "RELAY"
     message.source = this.identity.id;
     message.target = message.receiver;
