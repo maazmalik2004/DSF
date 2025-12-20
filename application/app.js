@@ -44,25 +44,26 @@ class App {
         })
 
         this.router.on("received", message => {
+            console.log("[APP] to check if received message has a payload or not ",message)
             if (message.payload.label == "REQUEST") {
-                if(message.payload.token && message.payload.token == this.identity.id){
-                    //it has already accepted and must process the request
-                    this.currentLoad = this.currentLoad + 1;
-                    setTimeout(() => {
-                        let responseMessage = {
-                            receiver: message.payload.hitAt,
-                            payload: {
-                                requestId: message.payload.requestId,
-                                label: "RESPONSE",
-                                token: this.identity.id,
-                                response: "some response"
-                            }
-                        }
-                        this.currentLoad = this.currentLoad - 1;
-                        // this.router.relay(responseMessage);
-                    }, 10000)
-                    return;
-                }
+                // if(message.payload.token && message.payload.token == this.identity.id){
+                //     //it has already accepted and must process the request
+                //     this.currentLoad = this.currentLoad + 1;
+                //     setTimeout(() => {
+                //         let responseMessage = {
+                //             receiver: message.payload.hitAt,
+                //             payload: {
+                //                 requestId: message.payload.requestId,
+                //                 label: "RESPONSE",
+                //                 token: this.identity.id,
+                //                 response: "some response"
+                //             }
+                //         }
+                //         this.currentLoad = this.currentLoad - 1;
+                //         // this.router.relay(responseMessage);
+                //     }, 10000)
+                //     return;
+                // }
 
                 let canAccept = this.canAccept();
                 let peers = [...this.connectedPeers.keys()].filter(peer => peer !== message.sender);
@@ -74,9 +75,9 @@ class App {
                     setTimeout(() => {
                         console.log("[APP] initiating response")
                         let responseMessage = {
+                            id:message.id,
                             receiver: message.payload.hitAt,
                             payload: {
-                                requestId: message.payload.requestId,
                                 label: "RESPONSE",
                                 token: this.identity.id,
                                 response: "some response"
@@ -84,8 +85,9 @@ class App {
                         }
                         this.currentLoad = this.currentLoad - 1;
                         visualizer.reportCompleted(this.identity.id)
+                        console.log("[APP] initiating response message", responseMessage)
                         this.router.relay(responseMessage);
-                    }, 10000)
+                    }, 10)
                     return;
                 }
 
@@ -103,13 +105,15 @@ class App {
 
             if (message.payload.label == "RESPONSE") {
                 //response will be relayed directly to hitAt
-                this.unresolvedRequests.delete(message.payload.requestId);
+                visualizer.log(message.id,"response")
+                this.unresolvedRequests.delete(message.id);
                 console.log("[APP] response ", message)
             }
         })
 
         this.router.on("dropped", message => {
-
+            visualizer.log(message.id, "dropped")
+            console.log("[APP] dropped message ",message)
         })
     }
 
@@ -124,19 +128,20 @@ class App {
 
     serve(request) {
         //we can accept it too but lets leave that out for now
-
         let requestId = ulid();
-
+        
         let message = {
+            id:requestId,
             payload: {
                 label: "REQUEST",
-                requestId: requestId,
                 hitAt: this.identity.id,
                 request: {
                     ...request
                 }
             }
         }
+
+        console.log("[APP] sending request ",message)
 
         // if(this.canAccept() || this.connectedPeers.size == 0){
         //     console.log("[APP] accepted request in A ",message)
@@ -155,9 +160,31 @@ class App {
             const peerIds = [...this.connectedPeers.keys()];
             const chosenNeighbour = peerIds[Math.floor(Math.random() * peerIds.length)];
             if(!chosenNeighbour){
-                return;
+                visualizer.log(requestId,"request")
+                //if there is no neighbour accept the request yourself
+                console.log("[APP] accepted request myself since no neighbours found ",message)
+                visualizer.reportAccepted(this.identity.id)
+                this.currentLoad = this.currentLoad + 1;
+                setTimeout(() => {
+                    console.log("[APP] initiating response")
+                    let responseMessage = {
+                        id:message.id,
+                        receiver: message.payload.hitAt,
+                        payload: {
+                            label: "RESPONSE",
+                            token: this.identity.id,
+                            response: "some response"
+                        }
+                    }
+                    this.currentLoad = this.currentLoad - 1;
+                    visualizer.reportCompleted(this.identity.id)
+                    console.log("[APP] initiating response message from self acceptance", responseMessage)
+                    this.router.relay(responseMessage);
+                },50);
+                return
             }
             message.receiver = chosenNeighbour;
+            visualizer.log(requestId,"request")
             this.router.relay(message);
             this.unresolvedRequests.set(requestId, message);
             return;
@@ -166,6 +193,7 @@ class App {
         //case 2, request has a token
         message.payload.token = request.token
         message.receiver = request.token;
+        visualizer.log(requestId,"request")
         this.router.relay(message);
         this.unresolvedRequests.set(requestId, message);
         return;

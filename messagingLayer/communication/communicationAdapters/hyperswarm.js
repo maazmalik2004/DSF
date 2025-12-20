@@ -112,11 +112,12 @@ class Hyperswarm {
 
             socket.on("error", (error) => {
                 if (error.code == "ETIMEDOUT") {
-                    console.log("[Hyperswarm] disconnect due to ETIMEDOUT")
+                    console.log("[Hyperswarm] disconnect due to ETIMEDOUT",othersIdentity.id)
                     this.disconnect(othersIdentity.id);
                     return;
                 }
-                this.emitter.emit("error", new Error("[Hyperswarm] socket error.", error))
+                // this.emitter.emit("error", new Error("[Hyperswarm] socket error.", error))
+                console.error("[hyperswarm] socket errosr",error)
             });
 
             /*

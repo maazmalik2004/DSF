@@ -311,7 +311,7 @@ class Router {
         return;
       }
 
-      this.emitter.emit("received", message);
+      // this.emitter.emit("received", message);
     });
 
     this.messagingAdapter.on("dropped", message => {
@@ -336,10 +336,6 @@ class Router {
         this.trace(message.target)
         return
       }
-
-      //this is never encountered
-      message.reason = "meow"
-      this.emitter.emit("dropped", message)
     })
 
     //console.log("[ROUTER] router online")
@@ -389,7 +385,7 @@ class Router {
     setTimeout(() => {
       if (this.unresolvedTraces.has(traceId)) {
         this.unresolvedTraces.delete(traceId);
-        //console.log("invalidation occured due to timeout",traceId)
+        console.log("invalidation occured due to trace timeout",JSON.stringify({traceId, receiver}))
         this.invalidate(receiver)
       }
     }, this.timeout)
@@ -420,6 +416,15 @@ class Router {
     message.source = this.identity.id;
     message.target = message.receiver;
     message.reroutingAttempts = 0;
+
+    //loopback : if we try to send a message to ourselves. it can never be dropped and will always be sent
+    //only applicable to relay messages
+    if(message.label == "RELAY" && message.target == this.identity.id){
+      message.sender = this.identity.id;
+      message.receiver = this.identity.id;
+      this.emitter.emit("received",message)
+      return;
+    }
 
     //case 1 path doesn't exist
     if (!this.targetPathMapping.has(message.receiver)) {

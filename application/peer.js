@@ -9,7 +9,9 @@ let loadBalancer = new App({
 });
 
 if(id == "A"){
-    setInterval(()=>{
-        loadBalancer.serve("some request")
-    },10000)
+    setTimeout(()=>{
+     setInterval(()=>{
+        loadBalancer.serve({meow:"some request"})
+    },500)
+},0)
 }
