@@ -24,9 +24,11 @@ class Hyperswarm {
         //unacknowledged messages
         this.unacknowledgedMessages = new Map();
 
-        this.allowedNeighbours = new Set([...object.allowedNeighbours])
+        // this.allowedNeighbours = new Set([...object.allowedNeighbours])
 
-        this.swarm = new HS();
+        this.swarm = new HS({       
+            multicast:true     
+        });
 
         this.swarm.join(this.topic, {
             announce: true,
@@ -81,7 +83,7 @@ class Hyperswarm {
                         othersIdentity = message.identity
 
                         //limiting connections based on topology
-                        if(!this.allowedNeighbours.has(message.identity.id))return;
+                        // if(!this.allowedNeighbours.has(message.identity.id))return;
 
                         //connected only when HELLO-ACK is received
                         this.emitter.emit("connected", message.identity);
@@ -139,7 +141,7 @@ class Hyperswarm {
                 if (socket) {
                     socket.destroy();
                     //limiting connections based on topology
-                    if(!this.allowedNeighbours.has(id))return;
+                    // if(!this.allowedNeighbours.has(id))return;
                     this.emitter.emit("disconnected", this.idIdentityMapping.get(id));
                 }
             }

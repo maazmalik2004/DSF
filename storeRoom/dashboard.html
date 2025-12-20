@@ -12,18 +12,19 @@
     font-family: monospace;
   }
 
-  /* ---------- TOP RIGHT METRIC ---------- */
-  #successRateBox {
+  /* ===== TOP RIGHT METRICS ===== */
+  #metricsBox {
     position: fixed;
     top: 8px;
     right: 12px;
-    padding: 6px 10px;
+    padding: 8px 12px;
     background: #111;
     color: #0f0;
     font-weight: bold;
-    font-size: 14px;
-    border-radius: 4px;
+    font-size: 13px;
+    border-radius: 6px;
     z-index: 1000;
+    line-height: 1.4;
   }
 
   #container {
@@ -69,9 +70,10 @@
 </head>
 <body>
 
-<!-- ---------- SUCCESS RATE ---------- -->
-<div id="successRateBox">
-  Success Rate: <span id="successRate">N/A</span>
+<!-- ===== METRICS ===== -->
+<div id="metricsBox">
+  Static SR: <span id="staticSR">N/A</span><br/>
+  Dynamic SR (last 100): <span id="dynamicSR">N/A</span>
 </div>
 
 <div id="container">
@@ -103,20 +105,20 @@
 
 </div>
 
-<!-- ---------- STABLE SCRIPT LOADING ---------- -->
+<!-- ===== STABLE SCRIPT LOADING ===== -->
 <script src="/socket.io/socket.io.js"></script>
 <script src="https://d3js.org/d3.v7.min.js"></script>
 
 <script>
-/* =========================================================
+/* =====================================================
    SOCKET
-========================================================= */
+===================================================== */
 
 const socket = io();
 
-/* =========================================================
-   AUTOSCROLL (LOGS)
-========================================================= */
+/* =====================================================
+   AUTOSCROLL
+===================================================== */
 
 const logsPanel = document.getElementById("logs");
 let autoScrollEnabled = true;
@@ -135,32 +137,50 @@ function maybeAutoScroll() {
   }
 }
 
-/* =========================================================
-   LOG TABLE STATE
-========================================================= */
+/* =====================================================
+   LOG + METRICS STATE
+===================================================== */
 
 const logBody = document.getElementById("logBody");
-const successRateEl = document.getElementById("successRate");
+const staticSREl = document.getElementById("staticSR");
+const dynamicSREl = document.getElementById("dynamicSR");
 
-const rowMap    = new Map(); // messageId -> <tr>
-const metaMap   = new Map(); // messageId -> { source, target }
-const resultMap = new Map(); // messageId -> { ack, nack }
+const rowMap = new Map();        // messageId -> row
+const metaMap = new Map();       // messageId -> { source, target }
+const resultMap = new Map();     // messageId -> { ack, nack }
+const messageOrder = [];         // insertion order (for sliding window)
 
 let serial = 0;
 
-function recomputeSuccessRate() {
+/* ---------- METRIC HELPERS ---------- */
+
+function computeSR(entries) {
   let ack = 0;
   let nack = 0;
-
-  for (const v of resultMap.values()) {
+  for (const v of entries) {
     if (v.ack) ack++;
     if (v.nack) nack++;
   }
-
   const total = ack + nack;
-  successRateEl.textContent =
-    total === 0 ? "N/A" : (ack / total).toFixed(5);
+  return total === 0 ? "N/A" : (ack / total).toFixed(5);
 }
+
+function recomputeMetrics() {
+  // Static = all messages
+  staticSREl.textContent = computeSR(resultMap.values());
+
+  // Dynamic = last 100 messages
+  const last100 = messageOrder
+    .slice(-100)
+    .map(id => resultMap.get(id))
+    .filter(Boolean);
+
+  dynamicSREl.textContent = computeSR(last100);
+}
+
+/* =====================================================
+   LOG UPDATE HANDLER
+===================================================== */
 
 socket.on("logUpdate", log => {
   let row = rowMap.get(log.messageId);
@@ -178,6 +198,8 @@ socket.on("logUpdate", log => {
       ack: false,
       nack: false
     });
+
+    messageOrder.push(log.messageId);
 
     row = document.createElement("tr");
     row.innerHTML = `
@@ -210,20 +232,20 @@ socket.on("logUpdate", log => {
   cells[5].textContent = log.received   ? "✔" : cells[5].textContent;
 
   const result = resultMap.get(log.messageId);
-  if (log.ack)  result.ack  = true;
+  if (log.ack) result.ack = true;
   if (log.nack) result.nack = true;
 
   cells[6].textContent = result.ack  ? "✔" : "";
   cells[7].textContent = result.nack ? "✔" : "";
   cells[8].textContent = log.reason || cells[8].textContent;
 
-  recomputeSuccessRate();
+  recomputeMetrics();
   maybeAutoScroll();
 });
 
-/* =========================================================
-   GRAPH (WITH NODE ID LABELS)
-========================================================= */
+/* =====================================================
+   GRAPH (WITH NODE LABELS)
+===================================================== */
 
 const svg = d3.select("#graph");
 const width = window.innerWidth * 0.6;
@@ -245,16 +267,13 @@ socket.on("graphUpdate", graph => {
 
   svg.selectAll("*").remove();
 
-  /* ----- LINKS ----- */
   const link = svg.append("g")
     .selectAll("line")
     .data(links)
     .enter()
     .append("line")
-    .attr("stroke", "#999")
-    .attr("stroke-width", 1.5);
+    .attr("stroke", "#999");
 
-  /* ----- NODE GROUP (CIRCLE + LABEL) ----- */
   const nodeGroup = svg.append("g")
     .selectAll("g")
     .data(nodes)
@@ -312,12 +331,11 @@ function dragEnded(event, d) {
   d.fy = null;
 }
 
-/* =========================================================
+/* =====================================================
    DIVIDER
-========================================================= */
+===================================================== */
 
 const divider = document.getElementById("divider");
-
 divider.onmousedown = () => {
   document.onmousemove = e => {
     logsPanel.style.width = e.clientX + "px";
