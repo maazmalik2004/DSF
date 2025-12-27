@@ -120,13 +120,10 @@ class Hyperswarm {
                 console.error("[hyperswarm] socket errosr",error)
             });
 
-            /*
             socket.on("close", () => {
-                console.log("disconnecting on close")
-                //delete the key socket mapping
+                console.log("[hyperswarm] disconnecting on close", othersIdentity.id)
                 this.disconnect(othersIdentity.id);
             });
-            */
         });
 
         console.log("[Hyperswarm] communication online")
