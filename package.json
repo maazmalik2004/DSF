@@ -12,6 +12,7 @@
   "type": "module",
   "dependencies": {
     "@keyv/sqlite": "^4.0.6",
+    "asciichart": "^1.5.25",
     "axios": "^1.13.2",
     "bittorrent-dht": "^11.0.11",
     "body-parser": "^2.2.1",

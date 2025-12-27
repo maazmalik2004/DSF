@@ -91,7 +91,7 @@ class Hyperswarm {
                     }
 
                     if (message.label == "ACK") {
-                        console.log("[Hyperswarm] received ACK", message)
+                        //console.log("[Hyperswarm] received ACK", message)
                         let sentMessage = this.unacknowledgedMessages.get(message.id)
                         this.unacknowledgedMessages.delete(message.id)
                         this.emitter.emit("sent", sentMessage)
@@ -112,21 +112,21 @@ class Hyperswarm {
 
             socket.on("error", (error) => {
                 if (error.code == "ETIMEDOUT") {
-                    console.log("[Hyperswarm] disconnect due to ETIMEDOUT",othersIdentity.id)
+                    //console.log("[Hyperswarm] disconnect due to ETIMEDOUT",othersIdentity.id)
                     this.disconnect(othersIdentity.id);
                     return;
                 }
                 // this.emitter.emit("error", new Error("[Hyperswarm] socket error.", error))
-                console.error("[hyperswarm] socket errosr",error)
+                //console.error("[hyperswarm] socket errosr",error)
             });
 
             socket.on("close", () => {
-                console.log("[hyperswarm] disconnecting on close", othersIdentity.id)
+                //console.log("[hyperswarm] disconnecting on close", othersIdentity.id)
                 this.disconnect(othersIdentity.id);
             });
         });
 
-        console.log("[Hyperswarm] communication online")
+        //console.log("[Hyperswarm] communication online")
     }
 
     disconnect(id) {
@@ -175,7 +175,7 @@ class Hyperswarm {
         setTimeout(() => {
             if (this.unacknowledgedMessages.has(message.id)) {
                 this.unacknowledgedMessages.delete(message.id)
-                console.log("[Hyperswarm] disconnect due to ACK timeout")
+                //console.log("[Hyperswarm] disconnect due to ACK timeout")
                 this.disconnect(message.receiver)
                 this.emitter.emit("dropped", message)
             }

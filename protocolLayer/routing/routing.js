@@ -342,6 +342,7 @@ class Router {
   }
 
   invalidate(target) {
+    
     //invalidate path
     this.targetPathMapping.delete(target);
 
@@ -379,11 +380,13 @@ class Router {
   }
 
   trace(receiver) {
+
     //we dont want to send redundant traces for the same target
     let traceId = ulid();
     this.unresolvedTraces.add(traceId)
     setTimeout(() => {
       if (this.unresolvedTraces.has(traceId)) {
+
         this.unresolvedTraces.delete(traceId);
         console.log("invalidation occured due to trace timeout",JSON.stringify({traceId, receiver}))
         this.invalidate(receiver)
@@ -410,6 +413,7 @@ class Router {
   }
 
   relay(message) {
+
     message.id = message.id || ulid();
     this.unresolvedRelays.set(message.id, message);
     message.label = message.label || "RELAY"
@@ -420,14 +424,32 @@ class Router {
     //loopback : if we try to send a message to ourselves. it can never be dropped and will always be sent
     //only applicable to relay messages
     if(message.label == "RELAY" && message.target == this.identity.id){
+
       message.sender = this.identity.id;
       message.receiver = this.identity.id;
       this.emitter.emit("received",message)
       return;
     }
 
+    if(message.label == "RELAY-ACK" && message.target == this.identity.id){
+      message.sender = this.identity.id;
+      message.receiver = this.identity.id;
+      this.emitter.emit("sent",message)
+      this.unresolvedRelays.delete(message.id)
+      return;
+    }
+
+    if(message.label == "RELAY-NACK" && message.target == this.identity.id){
+      message.sender = this.identity.id;
+      message.receiver = this.identity.id;
+      this.emitter.emit("dropped",message)
+      this.unresolvedRelays.delete(message.id)
+      return;
+    }
+
     //case 1 path doesn't exist
     if (!this.targetPathMapping.has(message.receiver)) {
+
       //console.log("[ROUTER/relay()] path not found to ", message.receiver);
 
       let currentPendingList = this.targetPendingMessagesMapping.get(message.receiver) || [];
