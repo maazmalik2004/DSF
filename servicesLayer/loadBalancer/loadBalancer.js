@@ -1,9 +1,6 @@
 import {
     EventEmitter
 } from "node:events";
-import Router from "../../protocolLayer/routing/routing.js"
-import Queue from "../../messagingLayer/queuing/queuingAdapters/byassQueue.js"
-import Communication from "../../messagingLayer/communication/communicationAdapters/hyperswarm.js"
 import {
     ulid
 } from "ulid";
@@ -12,38 +9,26 @@ import visualizer from "./utils.js";
 
 class LoadBalancer {
     constructor(object) {
-        console.log("constructorrrr")
         this.emitter = new EventEmitter();
         this.identity = object.identity
 
         this.connectedPeers = new Map();
         this.unresolvedRequests = new Map();
+        this.requestIdPromiseMapping = new Map();
 
         this.currentLoad = 0;
 
-        let communication = new Communication({
-            topic: "myTopic",
-            identity: object.identity
-        });
+        this.adapter = object.adapter
 
-        let queue = new Queue({
-            communicationAdapter: communication
-        });
-
-        this.router = new Router({
-            identity: object.identity,
-            messagingAdapter: queue
-        });
-
-        this.router.on("connected", identity => {
+        this.adapter.on("connected", identity => {
             this.connectedPeers.set(identity.id, identity);
         })
 
-        this.router.on("disconnected", identity => {
+        this.adapter.on("disconnected", identity => {
             this.connectedPeers.delete(identity.id);
         })
 
-        this.router.on("received", message => {
+        this.adapter.on("received", message => {
             if (message.payload.label == "REQUEST") {
                 // if(message.payload.token && message.payload.token == this.identity.id){
                 //     //it has already accepted and must process the request
@@ -59,7 +44,7 @@ class LoadBalancer {
                 //             }
                 //         }
                 //         this.currentLoad = this.currentLoad - 1;
-                //         // this.router.relay(responseMessage);
+                //         // this.adapter.relay(responseMessage);
                 //     }, 10000)
                 //     return;
                 // }
@@ -69,12 +54,12 @@ class LoadBalancer {
 
                 if (canAccept) {
                     visualizer.reportAccepted(this.identity.id)
-                    console.log("[APP] accepted request ",message)
+                    console.log("[APP] accepted request ", message)
                     this.currentLoad = this.currentLoad + 1;
                     setTimeout(() => {
                         console.log("[APP] initiating response")
                         let responseMessage = {
-                            id:message.id,
+                            id: message.id,
                             receiver: message.payload.hitAt,
                             payload: {
                                 label: "RESPONSE",
@@ -85,7 +70,7 @@ class LoadBalancer {
                         this.currentLoad = this.currentLoad - 1;
                         visualizer.reportCompleted(this.identity.id)
                         console.log("[APP] initiating response message", responseMessage)
-                        this.router.relay(responseMessage);
+                        this.adapter.relay(responseMessage);
                     }, 1000)
                     return;
                 }
@@ -96,45 +81,62 @@ class LoadBalancer {
                     peers.push(message.sender);
                 }
 
-                console.log("[APP] forwarding request ",message)
+                console.log("[APP] forwarding request ", message)
                 const chosenNeighbour = peers[Math.floor(Math.random() * peers.length)];
                 message.receiver = chosenNeighbour;
-                this.router.relay(message);
+                this.adapter.relay(message);
             }
 
             if (message.payload.label == "RESPONSE") {
                 //response will be relayed directly to hitAt
-                visualizer.log(message.id,"response")
+                visualizer.log(message.id, "response")
                 this.unresolvedRequests.delete(message.id);
+                this.requestIdPromiseMapping.get(message.payload.requestId).resolve(message.payload.response)
                 console.log("[APP] response ", message)
             }
         })
 
-        this.router.on("dropped", message => {
+        this.adapter.on("dropped", message => {
             visualizer.log(message.id, "dropped")
-            console.log("[APP] dropped message ",message)
+            this.requestIdPromiseMapping.get(message.payload.requestId).reject("request was dropped")
+            console.log("[APP] dropped message ", message)
         })
     }
 
     canAccept() {
         const loadFactor = 1 / (1 + this.currentLoad);
         const degreeFactor = 1 / (1 + this.connectedPeers.size)
-        const factorOfAcceptance = 0.9*loadFactor + 0.1*degreeFactor;
+        const factorOfAcceptance = 0.9 * loadFactor + 0.1 * degreeFactor;
         console.log(factorOfAcceptance)
 
         return Math.random() <= factorOfAcceptance
     }
 
-    send(request){
+    getDeferredPromise() {
+        let resolve, reject;
+        const promise = new Promise((res, rej) => {
+            resolve = res;
+            reject = rej;
+        });
+        return {
+            promise,
+            resolve,
+            reject
+        };
+    }
+
+    send(request) {
         this.serve(request);
     }
 
     serve(request) {
         //we can accept it too but lets leave that out for now
         let requestId = ulid();
-        
+        let requestPromise = this.getDeferredPromise();
+        this.requestIdPromiseMapping.set(requestId, requestPromise)
+
         let message = {
-            id:requestId,
+            id: requestId,
             payload: {
                 label: "REQUEST",
                 hitAt: this.identity.id,
@@ -144,7 +146,7 @@ class LoadBalancer {
             }
         }
 
-        console.log("[APP] sending request ",message)
+        console.log("[APP] sending request ", message)
 
         // if(this.canAccept() || this.connectedPeers.size == 0){
         //     console.log("[APP] accepted request in A ",message)
@@ -162,7 +164,7 @@ class LoadBalancer {
             //initiate random walk
             const peerIds = [...this.connectedPeers.keys()];
             const chosenNeighbour = peerIds[Math.floor(Math.random() * peerIds.length)];
-            if(!chosenNeighbour){
+            if (!chosenNeighbour) {
                 // visualizer.log(requestId,"request")
                 // //if there is no neighbour accept the request yourself
                 // console.log("[APP] accepted request myself since no neighbours found ",message)
@@ -182,24 +184,24 @@ class LoadBalancer {
                 //     this.currentLoad = this.currentLoad - 1;
                 //     visualizer.reportCompleted(this.identity.id)
                 //     console.log("[APP] initiating response message from self acceptance", responseMessage)
-                //     this.router.relay(responseMessage);
+                //     this.adapter.relay(responseMessage);
                 // },50);
-                return
+                return requestPromise.promise
             }
             message.receiver = chosenNeighbour;
-            visualizer.log(requestId,"request")
-            this.router.relay(message);
+            visualizer.log(requestId, "request")
+            this.adapter.relay(message);
             this.unresolvedRequests.set(requestId, message);
-            return;
+            return requestPromise.promise;
         }
 
         //case 2, request has a token
         message.payload.token = request.token
         message.receiver = request.token;
-        visualizer.log(requestId,"request")
-        this.router.relay(message);
+        visualizer.log(requestId, "request")
+        this.adapter.relay(message);
         this.unresolvedRequests.set(requestId, message);
-        return;
+        return requestPromise.promise;
     }
 }
 
