@@ -10,15 +10,15 @@ import visualizer from "./utils.js";
 class LoadBalancer {
     constructor(object) {
         this.emitter = new EventEmitter();
-        this.identity = object.identity
+        this.identity = object.identity;
+        this.adapter = object.adapter;
+        this.callback = object.callback;
 
         this.connectedPeers = new Map();
-        this.unresolvedRequests = new Map();
+
         this.requestIdPromiseMapping = new Map();
 
         this.currentLoad = 0;
-
-        this.adapter = object.adapter
 
         this.adapter.on("connected", identity => {
             this.connectedPeers.set(identity.id, identity);
@@ -28,56 +28,34 @@ class LoadBalancer {
             this.connectedPeers.delete(identity.id);
         })
 
-        this.adapter.on("received", message => {
+        this.adapter.on("received", async(message) => {
+            
             if (message.payload.label == "REQUEST") {
-                // if(message.payload.token && message.payload.token == this.identity.id){
-                //     //it has already accepted and must process the request
-                //     this.currentLoad = this.currentLoad + 1;
-                //     setTimeout(() => {
-                //         let responseMessage = {
-                //             receiver: message.payload.hitAt,
-                //             payload: {
-                //                 requestId: message.payload.requestId,
-                //                 label: "RESPONSE",
-                //                 token: this.identity.id,
-                //                 response: "some response"
-                //             }
-                //         }
-                //         this.currentLoad = this.currentLoad - 1;
-                //         // this.adapter.relay(responseMessage);
-                //     }, 10000)
-                //     return;
-                // }
-
+                
                 let canAccept = this.canAccept();
-                let peers = [...this.connectedPeers.keys()].filter(peer => peer !== message.sender);
-
                 if (canAccept) {
-                    visualizer.reportAccepted(this.identity.id)
-                    console.log("[APP] accepted request ", message)
+                    console.log("[LOAD-BALANCER] accepted request ", message)
                     this.currentLoad = this.currentLoad + 1;
-                    setTimeout(() => {
-                        console.log("[APP] initiating response")
-                        let responseMessage = {
-                            id: message.id,
-                            receiver: message.payload.hitAt,
-                            payload: {
-                                label: "RESPONSE",
-                                token: this.identity.id,
-                                response: "some response"
-                            }
+                    let response = await this.callback(message.payload.request);
+                    this.currentLoad = this.currentLoad - 1;
+                    
+                    let responseMessage = {
+                        id: message.id,
+                        receiver: message.payload.hitAt,
+                        payload: {
+                            label: "RESPONSE",
+                            token: this.identity.id,
+                            response: response
                         }
-                        this.currentLoad = this.currentLoad - 1;
-                        visualizer.reportCompleted(this.identity.id)
-                        console.log("[APP] initiating response message", responseMessage)
-                        this.adapter.relay(responseMessage);
-                    }, 1000)
-                    return;
+                    }
+                    console.log("[LOAD-BALANCER] initiating response ", responseMessage)
+                    this.adapter.relay(responseMessage);
+                    return requestPromise.promise;
                 }
 
-                //if we have reached a deadend, we are allowed to send it to our sender as well
+                let peers = [...this.connectedPeers.keys()].filter(peer => peer !== message.sender);
                 if (peers.length == 0) {
-                    console.log("[APP] reached deadend, sending back", message)
+                    console.log("[APP] reached deadend, allowing sending back", message)
                     peers.push(message.sender);
                 }
 
@@ -88,18 +66,14 @@ class LoadBalancer {
             }
 
             if (message.payload.label == "RESPONSE") {
-                //response will be relayed directly to hitAt
-                visualizer.log(message.id, "response")
-                this.unresolvedRequests.delete(message.id);
                 this.requestIdPromiseMapping.get(message.payload.requestId).resolve(message.payload.response)
                 console.log("[APP] response ", message)
             }
         })
 
         this.adapter.on("dropped", message => {
-            visualizer.log(message.id, "dropped")
             this.requestIdPromiseMapping.get(message.payload.requestId).reject("request was dropped")
-            console.log("[APP] dropped message ", message)
+            console.log("[APP] dropped request ", message)
         })
     }
 
@@ -107,8 +81,6 @@ class LoadBalancer {
         const loadFactor = 1 / (1 + this.currentLoad);
         const degreeFactor = 1 / (1 + this.connectedPeers.size)
         const factorOfAcceptance = 0.9 * loadFactor + 0.1 * degreeFactor;
-        console.log(factorOfAcceptance)
-
         return Math.random() <= factorOfAcceptance
     }
 
@@ -125,12 +97,7 @@ class LoadBalancer {
         };
     }
 
-    send(request) {
-        this.serve(request);
-    }
-
-    serve(request) {
-        //we can accept it too but lets leave that out for now
+    async send(request) {
         let requestId = ulid();
         let requestPromise = this.getDeferredPromise();
         this.requestIdPromiseMapping.set(requestId, requestPromise)
@@ -140,67 +107,46 @@ class LoadBalancer {
             payload: {
                 label: "REQUEST",
                 hitAt: this.identity.id,
-                request: {
-                    ...request
-                }
+                request: request
             }
         }
 
-        console.log("[APP] sending request ", message)
-
-        // if(this.canAccept() || this.connectedPeers.size == 0){
-        //     console.log("[APP] accepted request in A ",message)
-        //     visualizer.reportAccepted(this.identity.id)
-        //     this.currentLoad = this.currentLoad + 1;
-        //     setTimeout(() => {
-        //         this.currentLoad = this.currentLoad - 1;
-        //         visualizer.reportCompleted(this.identity.id)
-        //     },10000)
-        //     return;
-        // };
+        console.log("[LOAD-BALANCER] sending request ", message)
 
         //case 1, request has no token (a token will be assigned), we wil do a random walk
         if (!request.token) {
+            if(this.canAccept() || this.connectedPeers.size == 0){
+                console.log("[LOAD-BALANCER] accepted request myself", message)
+                this.currentLoad = this.currentLoad + 1;
+                let response = await this.callback(message.payload.request);
+                this.currentLoad = this.currentLoad - 1;
+                
+                let responseMessage = {
+                    id: message.id,
+                    receiver: message.payload.hitAt,
+                    payload: {
+                        label: "RESPONSE",
+                        token: this.identity.id,
+                        response: response
+                    }
+                }
+                console.log("[LOAD-BALANCER] initiating response ", responseMessage)
+                this.adapter.relay(responseMessage);
+                return requestPromise.promise
+            };
             //initiate random walk
             const peerIds = [...this.connectedPeers.keys()];
             const chosenNeighbour = peerIds[Math.floor(Math.random() * peerIds.length)];
-            if (!chosenNeighbour) {
-                // visualizer.log(requestId,"request")
-                // //if there is no neighbour accept the request yourself
-                // console.log("[APP] accepted request myself since no neighbours found ",message)
-                // visualizer.reportAccepted(this.identity.id)
-                // this.currentLoad = this.currentLoad + 1;
-                // setTimeout(() => {
-                //     console.log("[APP] initiating response")
-                //     let responseMessage = {
-                //         id:message.id,
-                //         receiver: message.payload.hitAt,
-                //         payload: {
-                //             label: "RESPONSE",
-                //             token: this.identity.id,
-                //             response: "some response"
-                //         }
-                //     }
-                //     this.currentLoad = this.currentLoad - 1;
-                //     visualizer.reportCompleted(this.identity.id)
-                //     console.log("[APP] initiating response message from self acceptance", responseMessage)
-                //     this.adapter.relay(responseMessage);
-                // },50);
-                return requestPromise.promise
-            }
             message.receiver = chosenNeighbour;
             visualizer.log(requestId, "request")
             this.adapter.relay(message);
-            this.unresolvedRequests.set(requestId, message);
             return requestPromise.promise;
         }
 
         //case 2, request has a token
         message.payload.token = request.token
         message.receiver = request.token;
-        visualizer.log(requestId, "request")
         this.adapter.relay(message);
-        this.unresolvedRequests.set(requestId, message);
         return requestPromise.promise;
     }
 }
