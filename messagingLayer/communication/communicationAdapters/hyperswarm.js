@@ -1,9 +1,8 @@
 import HS from "hyperswarm";
-import {
-    EventEmitter
-} from "node:events";
+import {EventEmitter} from "node:events";
 import crypto from "crypto";
 import split2 from 'split2';
+import utils from "../../../utils/utils.js"
 
 class Hyperswarm {
     constructor(object) {
@@ -20,15 +19,13 @@ class Hyperswarm {
 
         //peer identity informations
         this.idIdentityMapping = new Map();
-
-        //unacknowledged messages
+       
         this.unacknowledgedMessages = new Map();
 
-        // this.allowedNeighbours = new Set([...object.allowedNeighbours])
+        //for connect-disconnect consistency
+        this.idLatestConnectionIdMapping = new Map();
 
-        this.swarm = new HS({       
-            multicast:true     
-        });
+        this.swarm = new HS();
 
         this.swarm.join(this.topic, {
             announce: true,
@@ -36,12 +33,14 @@ class Hyperswarm {
         });
 
         this.swarm.on("connection", (socket, info) => {
+            const connectionId = utils.getRandomId();
+            socket.connectionId = connectionId
+            console.log("[HYPERSWARM] connection event on connectionId ",connectionId)
+            console.log("[HYPERSWARM] we are ",info.client?"client":"server")
+
+            socket.setKeepAlive(true, 1000);
+
             const key = socket.remotePublicKey.toString("hex")
-            // if (this.keySocketMapping.has(key)) {
-            //     let mappedSocket = this.keySocketMapping.get(key);
-            //     mappedSocket.destroy();
-            // }
-            this.keySocketMapping.set(key, socket);
 
             /*
             HELLO PROTOCOL
@@ -55,16 +54,15 @@ class Hyperswarm {
             }
             socket.write(JSON.stringify(helloMessage) + "\n")
 
-            let othersIdentity = null;
-            socket.pipe(split2(JSON.parse))
-                .on("data", (message) => {
+            let othersIdentity = {
+                id:null
+            };
+            
+            let stream = socket.pipe(split2(JSON.parse));
+            stream.on("data", (message) => {
 
                     if (message.label == "HELLO") {
-                        console.log("[Hyperswarm/socket.on(data)] received HELLO ", message);
-
-                        this.idKeyMapping.set(message.identity.id, message.key);
-                        this.idIdentityMapping.set(message.identity.id, message.identity);
-                        othersIdentity = message.identity;
+                        console.log("[Hyperswarm/socket.on(data)] received HELLO, sending acknowledgement ", message);
 
                         const helloAckMessage = {
                             label: "HELLO-ACK",
@@ -72,33 +70,40 @@ class Hyperswarm {
                             key: this.swarm.keyPair.publicKey.toString("hex")
                         }
                         socket.write(JSON.stringify(helloAckMessage) + "\n")
+                        console.log("[HYPERSWARM] sent hello ack")
                         return;
                     }
 
                     if (message.label == "HELLO-ACK") {
                         console.log("[Hyperswarm] received HELLO-ACK ", message);
+
+                        let previouslyConnected = this.idKeyMapping.has(message.identity.id)
+                        console.log("previously...",previouslyConnected)
+                        
+                        this.idIdentityMapping.set(message.identity.id, message.identity);
                         
                         this.idKeyMapping.set(message.identity.id, message.key);
-                        this.idIdentityMapping.set(message.identity.id, message.identity);
+                        this.keySocketMapping.set(key, socket);
+
+                        this.idLatestConnectionIdMapping.set(message.identity.id, connectionId)
+                        
                         othersIdentity = message.identity
-
-                        //limiting connections based on topology
-                        // if(!this.allowedNeighbours.has(message.identity.id))return;
-
-                        //connected only when HELLO-ACK is received
-                        this.emitter.emit("connected", message.identity);
+                        
+                        if(!previouslyConnected){
+                            this.emitter.emit("connected", message.identity)
+                            console.log("[HYPERSWARM] connected ", message.identity)
+                        }
                         return;
                     }
 
+                    //if we receive a message from someone, we know they are connected
+
                     if (message.label == "ACK") {
-                        //console.log("[Hyperswarm] received ACK", message)
                         let sentMessage = this.unacknowledgedMessages.get(message.id)
                         this.unacknowledgedMessages.delete(message.id)
                         this.emitter.emit("sent", sentMessage)
                         return;
                     }
-
-                    //unwrap the message
 
                     //sending acknowledgement
                     let ackMessage = {
@@ -112,55 +117,55 @@ class Hyperswarm {
 
             socket.on("error", (error) => {
                 if (error.code == "ETIMEDOUT") {
-                    //console.log("[Hyperswarm] disconnect due to ETIMEDOUT",othersIdentity.id)
-                    this.disconnect(othersIdentity.id);
+                    console.log("[Hyperswarm] ETIMEDOUT occured on connection ",connectionId)
+                    if(connectionId == this.idLatestConnectionIdMapping.get(othersIdentity.id)){
+                        this.disconnect(othersIdentity.id);
+                    }
                     return;
                 }
-                // this.emitter.emit("error", new Error("[Hyperswarm] socket error.", error))
-                //console.error("[hyperswarm] socket errosr",error)
+                console.log("[SOCKET ERROR] ",error)
             });
 
-            socket.on("close", () => {
-                //console.log("[hyperswarm] disconnecting on close", othersIdentity.id)
-                this.disconnect(othersIdentity.id);
+            socket.on("close", (error) => {
+                console.log("[SOCKET CLOSE] closing because ", error)
+                console.log("[HYPERSWARM] socket close event on connection ",connectionId)
+                console.log("   → socket.destroyed:", socket.destroyed);
+                console.log("   → socket.writable:", socket.writable);
+                console.log("   → socket.readable:", socket.readable);
+                if(connectionId == this.idLatestConnectionIdMapping.get(othersIdentity.id)){
+                    this.disconnect(othersIdentity.id);
+                }
+            });
+
+            socket.on("end", () => {
+                console.log("[HYPERSWARM] socket END event (remote closed write stream) on", connectionId);
+            });
+
+            socket.on("finish", () => {
+                console.log("[HYPERSWARM] socket FINISH event (local called .end()) on", connectionId);
+            });
+
+            socket.on("timeout", () => {
+                console.log("[HYPERSWARM] socket TIMEOUT event on", connectionId);
             });
         });
 
-        //console.log("[Hyperswarm] communication online")
+        console.log("[Hyperswarm] communication online")
     }
 
+    //we only emit a disconnect if the timeout(ack or otherwise) occurs on the latest connection
     disconnect(id) {
-        if (this.idKeyMapping.has(id)) {
+        if(this.idKeyMapping.has(id)){
             let key = this.idKeyMapping.get(id);
             this.idKeyMapping.delete(id);
-            if (this.keySocketMapping.has(key)) {
-                let socket = this.keySocketMapping.get(key);
-                this.keySocketMapping.delete(key);
-                if (socket) {
-                    socket.destroy();
-                    //limiting connections based on topology
-                    // if(!this.allowedNeighbours.has(id))return;
-                    this.emitter.emit("disconnected", this.idIdentityMapping.get(id));
-                }
-            }
-        }
-    }
+            this.keySocketMapping.delete(key);
 
-    getPeer(id){
-        return this.idIdentityMapping.get(id) || null;
-    }
-
-    getPeers(){
-        let peerList = [];
-        this.idIdentityMapping.forEach((value, key)=>{
-            peerList.push(value);
-        })
-        return peerList || null
+            this.emitter.emit("disconnected", this.idIdentityMapping.get(id));
+            console.log("[HYPERSWARM] disconnected ",id);   
+        }     
     }
 
     send(message) {
-        //wrap the message
-       
         if(!this.idKeyMapping.has(message.receiver)){
             this.emitter.emit("dropped", message)
             return;
@@ -175,8 +180,10 @@ class Hyperswarm {
         setTimeout(() => {
             if (this.unacknowledgedMessages.has(message.id)) {
                 this.unacknowledgedMessages.delete(message.id)
-                //console.log("[Hyperswarm] disconnect due to ACK timeout")
-                this.disconnect(message.receiver)
+                console.log("[Hyperswarm] ACK timeout occured on connection ",receiverSocket.connectionId)
+                if(receiverSocket.connectionId == this.idLatestConnectionIdMapping.get(message.receiver)){
+                    this.disconnect(message.receiver)
+                }
                 this.emitter.emit("dropped", message)
             }
         }, this.timeout);

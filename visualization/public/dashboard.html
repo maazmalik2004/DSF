@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Event Dashboard</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="left-panel">
+    <h2>Components</h2>
+    <div id="component-list"></div>
+  </div>
+  <div class="main-content">
+    <h1>Event Logs</h1>
+    <ul class="nav nav-tabs" id="myTab" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="data-tab" data-bs-toggle="tab" data-bs-target="#data" type="button" role="tab">Data</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="sql-tab" data-bs-toggle="tab" data-bs-target="#sql" type="button" role="tab">SQL</button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="viz-tab" data-bs-toggle="tab" data-bs-target="#viz" type="button" role="tab">Visualization</button>
+      </li>
+    </ul>
+    <div class="tab-content" id="myTabContent">
+      <!-- DATA TAB -->
+      <div class="tab-pane fade show active" id="data" role="tabpanel">
+        <div class="table-container" id="table-container">
+          <div class="empty-message">Select a component ID from the left panel to view logs.</div>
+        </div>
+      </div>
+
+      <!-- SQL TAB -->
+      <div class="tab-pane fade" id="sql" role="tabpanel">
+        <div class="sql-editor-section">
+          <div class="editor-container">
+            <textarea id="sql-editor">-- Pivoted view with serial numbers and timestamps
+-- Columns: serial, message_id, first_event_time, last_event_time, [event columns]
+
+SELECT serial, message_id, first_event_time, last_event_time, request, response
+FROM logs
+ORDER BY serial DESC
+LIMIT 50;</textarea>
+            <button id="run-sql" class="btn btn-primary mt-3">Run SQL</button>
+          </div>
+        </div>
+        <div class="sql-result-section">
+          <div id="sql-result">
+            <div class="empty-message">Run a query to see results.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VISUALIZATION TAB -->
+      <div class="tab-pane fade" id="viz" role="tabpanel">
+        <div class="editor-container mb-4">
+          <textarea id="viz-editor">{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "title": "Requests: With vs Without Response",
+  "data": {
+    "url": "/pivoted-logs/{componentId}"
+  },
+  "transform": [
+    {
+      "calculate": "datum.request === 'true' ? (datum.response === 'true' ? 'With Response' : 'Without Response') : null",
+      "as": "status"
+    },
+    {"filter": "datum.status != null"},
+    {
+      "aggregate": [{"op": "count", "as": "count"}],
+      "groupby": ["status"]
+    }
+  ],
+  "mark": {"type": "arc", "innerRadius": 60, "tooltip": true},
+  "encoding": {
+    "theta": {"field": "count", "type": "quantitative"},
+    "color": {
+      "field": "status",
+      "type": "nominal",
+      "scale": {"range": ["#28a745", "#dc3545"]},
+      "legend": {"title": null, "orient": "bottom"}
+    },
+    "tooltip": [
+      {"field": "status", "title": "Status"},
+      {"field": "count", "title": "Count"}
+    ]
+  },
+  "view": {"stroke": null}
+}</textarea>
+          <button id="run-viz" class="btn btn-primary mt-3">Generate Viz</button>
+        </div>
+        <div id="viz-result"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/sql/sql.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/javascript/javascript.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega@5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-lite@5"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vega-embed@6"></script>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>

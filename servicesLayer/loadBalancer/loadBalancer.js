@@ -1,59 +1,53 @@
-import {
-    EventEmitter
-} from "node:events";
-import {
-    ulid
-} from "ulid";
-
-import visualizer from "./utils.js";
+import {EventEmitter} from "node:events";
+import utils from "../../utils/utils.js"
+import client from "./client.js"
 
 class LoadBalancer {
     constructor(object) {
-        this.emitter = new EventEmitter();
         this.identity = object.identity;
         this.adapter = object.adapter;
         this.callback = object.callback;
 
-        this.connectedPeers = new Map();
-
-        this.requestIdPromiseMapping = new Map();
-
+        this.emitter = new EventEmitter();
+        this.connectedPeers = new Set();
+        this.requestIdDeferredPromiseMapping = new Map();
         this.currentLoad = 0;
+        this.componentId = "LoadBalancer" + "-" + utils.getRandomId();
 
         this.adapter.on("connected", identity => {
-            this.connectedPeers.set(identity.id, identity);
+            console.log("[LOAD BALANCER] connected ", identity.id)
+            this.connectedPeers.add(identity.id);
         })
 
         this.adapter.on("disconnected", identity => {
+            console.log("[LOAD BALANCER] disconnected ", identity.id)
             this.connectedPeers.delete(identity.id);
         })
 
         this.adapter.on("received", async(message) => {
             
             if (message.payload.label == "REQUEST") {
-                
-                let canAccept = this.canAccept();
-                if (canAccept) {
-                    console.log("[LOAD-BALANCER] accepted request ", message)
+                if (this.canAccept() || message.payload.token == this.identity.id) {
+                    console.log("[LOAD-BALANCER] received request -> accepted request ", message)
                     this.currentLoad = this.currentLoad + 1;
                     let response = await this.callback(message.payload.request);
                     this.currentLoad = this.currentLoad - 1;
                     
                     let responseMessage = {
-                        id: message.id,
                         receiver: message.payload.hitAt,
                         payload: {
                             label: "RESPONSE",
+                            requestId:message.payload.requestId,
                             token: this.identity.id,
                             response: response
                         }
                     }
                     console.log("[LOAD-BALANCER] initiating response ", responseMessage)
                     this.adapter.relay(responseMessage);
-                    return requestPromise.promise;
+                    return;
                 }
 
-                let peers = [...this.connectedPeers.keys()].filter(peer => peer !== message.sender);
+                let peers = [...this.connectedPeers].filter(peer => peer !== message.sender);
                 if (peers.length == 0) {
                     console.log("[APP] reached deadend, allowing sending back", message)
                     peers.push(message.sender);
@@ -66,14 +60,59 @@ class LoadBalancer {
             }
 
             if (message.payload.label == "RESPONSE") {
-                this.requestIdPromiseMapping.get(message.payload.requestId).resolve(message.payload.response)
+                let requestPromise = this.requestIdDeferredPromiseMapping.get(message.payload.requestId);
+                if(!requestPromise)return;
+                requestPromise.resolve(message.payload.response)
+                this.requestIdDeferredPromiseMapping.delete(message.payload.requestId)
+                client.log({
+                    componentId:this.componentId,
+                    messageId:message.payload.requestId,
+                    eventName:"response",
+                    eventValue:"true"
+                })
                 console.log("[APP] response ", message)
+            }
+
+            if(message.payload.label == "FAILURE"){
+                console.log("[LOAD-BALANCER] received FAILURE message ",message)
+                let requestPromise = this.requestIdDeferredPromiseMapping.get(message.payload.requestId);
+                if(!requestPromise)return;
+                requestPromise.resolve({
+                    status:"FAILURE",
+                    requestId:message.payload.requestId
+                })
+                this.requestIdDeferredPromiseMapping.delete(message.payload.requestId)
+                client.log({
+                    componentId:this.componentId,
+                    messageId:message.payload.requestId,
+                    eventName:"failure",
+                    eventValue:"true"
+                })
             }
         })
 
         this.adapter.on("dropped", message => {
-            this.requestIdPromiseMapping.get(message.payload.requestId).reject("request was dropped")
-            console.log("[APP] dropped request ", message)
+            console.log("[LOAD BALANCER] dropped ",message)
+            if(message.payload.label == "REQUEST"){
+                let failureMessage = {
+                    receiver:message.payload.hitAt,
+                    payload:{
+                        label:"FAILURE",
+                        requestId:message.payload.requestId
+                    }
+                }
+                this.adapter.send(failureMessage);
+            }
+            if(message.payload.label == "RESPONSE"){
+                let failureMessage = {
+                    receiver:message.target,
+                    payload:{
+                        label:"FAILURE",
+                        requestId:message.payload.requestId
+                    }
+                }
+                this.adapter.send(failureMessage);
+            }
         })
     }
 
@@ -98,54 +137,60 @@ class LoadBalancer {
     }
 
     async send(request) {
-        let requestId = ulid();
+        let requestId = utils.getRandomId();
         let requestPromise = this.getDeferredPromise();
-        this.requestIdPromiseMapping.set(requestId, requestPromise)
+        this.requestIdDeferredPromiseMapping.set(requestId, requestPromise)
 
         let message = {
-            id: requestId,
             payload: {
                 label: "REQUEST",
+                requestId:requestId,
                 hitAt: this.identity.id,
                 request: request
             }
         }
 
-        console.log("[LOAD-BALANCER] sending request ", message)
+        console.log("[LOAD-BALANCER] sending request... ", message)
+        client.log({
+            componentId:this.componentId,
+            messageId:requestId,
+            eventName:"request",
+            eventValue:"true"
+        })
 
-        //case 1, request has no token (a token will be assigned), we wil do a random walk
-        if (!request.token) {
-            if(this.canAccept() || this.connectedPeers.size == 0){
-                console.log("[LOAD-BALANCER] accepted request myself", message)
-                this.currentLoad = this.currentLoad + 1;
-                let response = await this.callback(message.payload.request);
-                this.currentLoad = this.currentLoad - 1;
-                
-                let responseMessage = {
-                    id: message.id,
-                    receiver: message.payload.hitAt,
-                    payload: {
-                        label: "RESPONSE",
-                        token: this.identity.id,
-                        response: response
-                    }
-                }
-                console.log("[LOAD-BALANCER] initiating response ", responseMessage)
-                this.adapter.relay(responseMessage);
-                return requestPromise.promise
-            };
-            //initiate random walk
-            const peerIds = [...this.connectedPeers.keys()];
-            const chosenNeighbour = peerIds[Math.floor(Math.random() * peerIds.length)];
-            message.receiver = chosenNeighbour;
-            visualizer.log(requestId, "request")
+        // case 1, request has a token
+        if (request.token) {
+            message.payload.token = request.token
+            message.receiver = request.token;
             this.adapter.relay(message);
             return requestPromise.promise;
         }
 
-        //case 2, request has a token
-        message.payload.token = request.token
-        message.receiver = request.token;
+        //case 2, request has no token
+        if(this.canAccept() || this.connectedPeers.size == 0){
+            console.log("[LOAD-BALANCER] accepted request myself", message)
+            this.currentLoad = this.currentLoad + 1;
+            let response = await this.callback(message.payload.request);
+            this.currentLoad = this.currentLoad - 1;
+            
+            let responseMessage = {
+                receiver: message.payload.hitAt,
+                payload: {
+                    requestId:message.payload.requestId,
+                    label: "RESPONSE",
+                    token: this.identity.id,
+                    response: response
+                }
+            }
+            console.log("[LOAD-BALANCER] initiating response ", responseMessage)
+            this.adapter.relay(responseMessage);
+            return requestPromise.promise
+        };
+
+        //initiate random walk
+        const peerIds = [...this.connectedPeers];
+        const chosenNeighbour = peerIds[Math.floor(Math.random() * peerIds.length)];
+        message.receiver = chosenNeighbour;
         this.adapter.relay(message);
         return requestPromise.promise;
     }

@@ -1,0 +1,242 @@
+/* public/styles.css — FINAL VERSION: FIXED SCROLLING, STICKY TABS & FIXED TABLE HEADERS */
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  display: flex;
+  min-height: 100vh;
+  background-color: #f5f7fa;
+  color: #212529;
+}
+
+.left-panel {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 300px;
+  height: 100vh;
+  background-color: #ffffff;
+  border-right: 1px solid #e0e4e8;
+  padding: 24px 20px;
+  overflow-y: auto;
+  box-shadow: 4px 0 12px rgba(0, 0, 0, 0.08);
+  z-index: 10;
+  box-sizing: border-box;
+}
+
+.left-panel h2 {
+  margin: 0 0 24px 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.main-content {
+  margin-left: 300px;
+  padding: 40px;
+  width: calc(100% - 300px);
+  box-sizing: border-box;
+  background-color: #f5f7fa;
+  min-height: 100vh;
+}
+
+.main-content h1 {
+  margin-top: 0;
+  margin-bottom: 32px;
+  font-size: 2rem;
+  font-weight: 700;
+  color: #2c3e50;
+}
+
+/* Sticky tabs at top */
+.nav-tabs {
+  position: sticky;
+  top: 0;
+  background-color: #f5f7fa;
+  z-index: 30;
+  padding: 10px 0 0 0;
+  border-bottom: 1px solid #e0e4e8;
+  margin-bottom: 32px;
+}
+
+.nav-tabs .nav-link {
+  padding: 12px 24px;
+  font-weight: 500;
+  color: #495057;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  transition: all 0.2s ease;
+}
+
+.nav-tabs .nav-link:hover {
+  color: #0d6efd;
+}
+
+.nav-tabs .nav-link.active {
+  color: #0d6efd;
+  border-bottom: 3px solid #0d6efd;
+  font-weight: 600;
+}
+
+/* Table containers with fixed headers */
+.table-container {
+  background: #ffffff;
+  border: 1px solid #e0e4e8;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  margin-bottom: 32px;
+}
+
+.table-wrapper {
+  max-height: 70vh;
+  overflow: auto;
+}
+
+.table-wrapper table {
+  width: 100%;
+  min-width: 800px;
+  border-collapse: collapse;
+  margin: 0;
+}
+
+.table-wrapper thead th {
+  position: sticky;
+  top: 0;
+  background-color: #f8f9fa;
+  padding: 16px;
+  text-align: left;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #e0e4e8;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.03);
+}
+
+.table-wrapper tbody td {
+  padding: 14px 16px;
+  border-bottom: 1px solid #e9ecef;
+  background-color: #ffffff;
+}
+
+.table-wrapper tbody tr:hover {
+  background-color: #f1f8ff;
+}
+
+.empty-message {
+  padding: 80px 20px;
+  text-align: center;
+  color: #6c757d;
+  font-size: 1.1rem;
+}
+
+/* SQL Tab Layout */
+.sql-editor-section {
+  background: #ffffff;
+  border: 1px solid #e0e4e8;
+  border-radius: 12px;
+  padding: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  margin-bottom: 32px;
+}
+
+.sql-result-section {
+  background: #ffffff;
+  border: 1px solid #e0e4e8;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+/* Editor */
+.editor-container {
+  background: #ffffff;
+  border-radius: 12px;
+}
+
+.CodeMirror {
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  height: 260px !important;
+  font-size: 0.95rem;
+}
+
+.btn-primary {
+  background-color: #0d6efd;
+  border: none;
+  padding: 10px 24px;
+  border-radius: 8px;
+  font-weight: 500;
+  transition: all 0.2s ease;
+}
+
+.btn-primary:hover {
+  background-color: #0b5ed7;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.25);
+}
+
+/* Component list */
+.component-name {
+  font-weight: 600;
+  font-size: 1.05rem;
+  margin: 24px 0 10px 0;
+  color: #2c3e50;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.component-id {
+  padding: 10px 14px;
+  margin: 4px 0;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-size: 0.92rem;
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+}
+
+.component-id:hover {
+  background-color: #e9ecef;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.component-id.selected {
+  background-color: #0d6efd;
+  color: white;
+  font-weight: 600;
+  border-color: #0d6efd;
+  box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3);
+}
+
+.text-danger {
+  color: #dc3545 !important;
+  background-color: #f8d7da;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #f5c2c7;
+  margin: 20px 0;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #c0c0c0;
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}

@@ -127,6 +127,7 @@ class Election {
 
         this.adapter.on("dropped", message => {
             console.log("[ELECTION] dropped message ", message)
+            //[future scope]if a crown message was dropped we must reelect to replace
         })
     }
 
