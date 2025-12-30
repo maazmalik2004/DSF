@@ -17,7 +17,7 @@ class Router {
 
         this.identity = object.identity;
 
-        this.timeout = object.timeout || 20000;
+        this.timeout = object.timeout || 30000;
         //console.log(this.timeout)
         //lets have 3 max attempts
         this.maxReroutingAttempts = object.maxReroutingAttempts || 3

@@ -1,0 +1,55 @@
+{
+  "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
+  "title": "Requests Accepted per Peer (Last 50 Records)",
+  "data": {
+    "url": "/pivoted-logs/{componentId}"
+  },
+  "transform": [
+    {
+      "window": [
+        { "op": "row_number", "as": "rank" }
+      ],
+      "sort": [
+        { "field": "serial", "order": "descending" }
+      ]
+    },
+    {
+      "filter": "datum.rank <= 50"
+    },
+    {
+      "filter": "datum.processed_by != null"
+    },
+    {
+      "aggregate": [
+        { "op": "count", "as": "request_count" }
+      ],
+      "groupby": ["processed_by"]
+    }
+  ],
+  "mark": {
+    "type": "bar",
+    "tooltip": true
+  },
+  "encoding": {
+    "x": {
+      "field": "processed_by",
+      "type": "nominal",
+      "title": "Peer ID",
+      "axis": { "labelAngle": -30 }
+    },
+    "y": {
+      "field": "request_count",
+      "type": "quantitative",
+      "title": "Number of Accepted Requests"
+    },
+    "color": {
+      "field": "processed_by",
+      "type": "nominal",
+      "legend": null
+    },
+    "tooltip": [
+      { "field": "processed_by", "title": "Peer ID" },
+      { "field": "request_count", "title": "Requests (Last 50)" }
+    ]
+  }
+}

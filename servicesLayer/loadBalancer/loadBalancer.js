@@ -12,7 +12,7 @@ class LoadBalancer {
         this.connectedPeers = new Set();
         this.requestIdDeferredPromiseMapping = new Map();
         this.currentLoad = 0;
-        this.componentId = "LoadBalancer" + "-" + utils.getRandomId();
+        this.componentId = "LoadBalancer" + "-" + (object.name || "default")
 
         this.adapter.on("connected", identity => {
             console.log("[LOAD BALANCER] connected ", identity.id)
@@ -53,9 +53,9 @@ class LoadBalancer {
                     peers.push(message.sender);
                 }
 
-                console.log("[APP] forwarding request ", message)
                 const chosenNeighbour = peers[Math.floor(Math.random() * peers.length)];
                 message.receiver = chosenNeighbour;
+                console.log("[APP] forwarding request ", message)
                 this.adapter.relay(message);
             }
 
@@ -69,6 +69,12 @@ class LoadBalancer {
                     messageId:message.payload.requestId,
                     eventName:"response",
                     eventValue:"true"
+                })
+                client.log({
+                    componentId:this.componentId,
+                    messageId:message.payload.requestId,
+                    eventName:"processed_by",
+                    eventValue:message.payload.token
                 })
                 console.log("[APP] response ", message)
             }

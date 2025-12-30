@@ -1,4 +1,4 @@
-// public/script.js — FINAL VERSION: NO JUMPING, SMOOTH SCROLL PRESERVATION
+// public/script.js — FINAL VERSION: POLLING EVERY 3 SECONDS
 
 document.addEventListener('DOMContentLoaded', () => {
   const componentList = document.getElementById('component-list');
@@ -11,6 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
   let needsRender = false;
   let currentView = null;
   const socket = io();
+
+  let pollInterval = null;
 
   // CodeMirror editors
   const sqlEditor = CodeMirror.fromTextArea(document.getElementById('sql-editor'), {
@@ -45,13 +47,17 @@ document.addEventListener('DOMContentLoaded', () => {
         idDiv.addEventListener('click', () => {
           document.querySelectorAll('.component-id').forEach(el => el.classList.remove('selected'));
           idDiv.classList.add('selected');
+
           if (selectedId) socket.emit('unsubscribe', selectedId);
           selectedId = id;
           socket.emit('subscribe', id);
+
           loadLogs(id);
           sqlResult.innerHTML = '<div class="empty-message">Run a query to see results.</div>';
           vizResult.innerHTML = '';
           currentView = null;
+
+          startPolling(); // Start 3-second polling
         });
         componentList.appendChild(idDiv);
       });
@@ -79,18 +85,16 @@ document.addEventListener('DOMContentLoaded', () => {
     needsRender = false;
   }
 
-  // FINAL FIX: Preserve scroll position perfectly
+  // Preserve scroll position perfectly
   function renderTablePreserveScroll() {
     if (tableData.length === 0) {
       tableContainer.innerHTML = '<div class="empty-message">No data available.</div>';
       return;
     }
 
-    // Get current scrollable wrapper and its scroll position
     const currentWrapper = tableContainer.querySelector('.table-wrapper');
     const scrollTop = currentWrapper ? currentWrapper.scrollTop : 0;
 
-    // Build new table HTML
     let html = '<div class="table-wrapper"><table><thead><tr><th>#</th><th>Message ID</th><th>First Event Time</th><th>Last Event Time</th>';
     eventNames.forEach(name => {
       html += `<th>${name}</th>`;
@@ -111,17 +115,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     html += '</tbody></table></div>';
 
-    // Replace content
     tableContainer.innerHTML = html;
 
-    // Restore scroll position on the new wrapper
     const newWrapper = tableContainer.querySelector('.table-wrapper');
     if (newWrapper) {
       newWrapper.scrollTop = scrollTop;
     }
   }
 
-  // Run SQL query — also with table-wrapper
+  // Run SQL query
   document.getElementById('run-sql').addEventListener('click', async () => {
     if (!selectedId) return alert('Select a component first');
 
@@ -188,17 +190,32 @@ document.addEventListener('DOMContentLoaded', () => {
       });
   });
 
-  // Socket.IO real-time updates — now preserves scroll
-  socket.on('update_components', renderComponentList);
+  // Polling control
+  function startPolling() {
+    if (pollInterval) clearInterval(pollInterval);
 
-  socket.on('new_log', () => {
-    if (selectedId) {
-      loadLogs(selectedId); // This now preserves scroll perfectly
+    pollInterval = setInterval(() => {
+      if (selectedId) {
+        loadLogs(selectedId);
+
+        // Auto-refresh viz only if Viz tab is active
+        const vizTab = document.querySelector('#viz-tab');
+        if (vizTab && vizTab.classList.contains('active') && currentView) {
+          document.getElementById('run-viz').click();
+        }
+      }
+    }, 3000);
+  }
+
+  function stopPolling() {
+    if (pollInterval) {
+      clearInterval(pollInterval);
+      pollInterval = null;
     }
-    if (currentView) {
-      document.getElementById('run-viz').click();
-    }
-  });
+  }
+
+  // Socket: only for component list updates
+  socket.on('update_components', renderComponentList);
 
   // Re-render Data tab on switch if needed
   const tabElement = document.getElementById('myTab');
@@ -208,6 +225,11 @@ document.addEventListener('DOMContentLoaded', () => {
       renderTablePreserveScroll();
       needsRender = false;
     }
+  });
+
+  // Cleanup on unload
+  window.addEventListener('beforeunload', () => {
+    stopPolling();
   });
 
   // Initial load

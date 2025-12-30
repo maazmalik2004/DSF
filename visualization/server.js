@@ -1,4 +1,4 @@
-// server.js (ESM) — FINAL WITH SERIAL NUMBERS & TIMESTAMPS
+// server.js (ESM) — FINAL WITH POLLING (3-second updates)
 import express from 'express';
 import bodyParser from 'body-parser';
 import path from 'path';
@@ -65,8 +65,12 @@ app.post('/log', (req, res) => {
       (err) => {
         if (err) return res.status(500).json({ error: 'Database error' });
         res.json({ success: true });
-        io.to(componentId).emit('new_log', { messageId, eventName, value: eventValueStr });
-        if (isNew) getComponentMap(map => io.emit('update_components', map));
+
+        // Only notify clients when a completely new component appears
+        if (isNew) {
+          getComponentMap(map => io.emit('update_components', map));
+        }
+        // No per-log 'new_log' emit anymore — frontend polls instead
       }
     );
   });
@@ -119,7 +123,7 @@ app.get('/flat-logs/:componentId', (req, res) => {
   });
 });
 
-// Pivoted logs for visualization — now includes timestamps
+// Pivoted logs for visualization — includes timestamps
 app.get('/pivoted-logs/:componentId', (req, res) => {
   const { componentId } = req.params;
 

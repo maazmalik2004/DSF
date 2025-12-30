@@ -28,7 +28,8 @@ let loadBalancer = new LoadBalancer({
         await new Promise(resolve => setTimeout(resolve, 10000));
         return { message: "some response" };
     },
-    adapter:router
+    adapter:router,
+    name:"myRouter"
 });
 
 if(id == "A"){
@@ -38,6 +39,6 @@ if(id == "A"){
             meow:"some request",
         })
         console.log("[PEER] response ", response)
-    },500)
+    },300)
 },0)
 }

@@ -1,5 +1,4 @@
 async function log({ componentId, messageId, eventName, eventValue }) {
-    console.log("meowmroww")
     fetch('http://localhost:3000/log', {
     method: 'POST',
     headers: {

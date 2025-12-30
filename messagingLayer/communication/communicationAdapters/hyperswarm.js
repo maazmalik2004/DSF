@@ -8,7 +8,7 @@ class Hyperswarm {
     constructor(object) {
         this.emitter = new EventEmitter();
 
-        this.timeout = object.timeout || 5000;
+        this.timeout = object.timeout || 10000;
 
         //32 bytes topic (256 bits)
         this.topic = crypto.createHash("sha256").update(object.topic).digest();
@@ -159,6 +159,13 @@ class Hyperswarm {
             let key = this.idKeyMapping.get(id);
             this.idKeyMapping.delete(id);
             this.keySocketMapping.delete(key);
+
+            if(this.idKeyMapping.size == 0){
+                this.swarm.join(this.topic, {
+                    announce: true,
+                    lookup: true
+                });
+            }
 
             this.emitter.emit("disconnected", this.idIdentityMapping.get(id));
             console.log("[HYPERSWARM] disconnected ",id);   
