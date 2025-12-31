@@ -3,19 +3,21 @@ import {EventEmitter} from "node:events";
 import crypto from "crypto";
 import split2 from 'split2';
 import utils from "../../../utils/utils.js"
+import client from "./client.js"
 
 class Hyperswarm {
     constructor(object) {
+        this.componentId = object.componentId || "Hyperswarm-default";
         this.emitter = new EventEmitter();
 
-        this.timeout = object.timeout || 10000;
+        this.timeout = object.timeout || 2000;
+        this.maxResendAttempts = object.maxResendAttempts || 10;
 
         //32 bytes topic (256 bits)
         this.topic = crypto.createHash("sha256").update(object.topic).digest();
 
         //id to socket mapping
-        this.idKeyMapping = new Map();
-        this.keySocketMapping = new Map();
+        this.idSocketMapping = new Map();
 
         //peer identity informations
         this.idIdentityMapping = new Map();
@@ -24,6 +26,8 @@ class Hyperswarm {
 
         //for connect-disconnect consistency
         this.idLatestConnectionIdMapping = new Map();
+
+        this.encounteredMessages = new Set();
 
         this.swarm = new HS();
 
@@ -77,14 +81,11 @@ class Hyperswarm {
                     if (message.label == "HELLO-ACK") {
                         console.log("[Hyperswarm] received HELLO-ACK ", message);
 
-                        let previouslyConnected = this.idKeyMapping.has(message.identity.id)
+                        let previouslyConnected = this.idSocketMapping.has(message.identity.id)
                         console.log("previously...",previouslyConnected)
                         
                         this.idIdentityMapping.set(message.identity.id, message.identity);
-                        
-                        this.idKeyMapping.set(message.identity.id, message.key);
-                        this.keySocketMapping.set(key, socket);
-
+                        this.idSocketMapping.set(message.identity.id, socket)
                         this.idLatestConnectionIdMapping.set(message.identity.id, connectionId)
                         
                         othersIdentity = message.identity
@@ -96,23 +97,42 @@ class Hyperswarm {
                         return;
                     }
 
-                    //if we receive a message from someone, we know they are connected
+                    //if we receive a message from someone, be it ACK or any other message, we know they are connected
+                    if(!this.idSocketMapping.has(othersIdentity.id)){
+                        this.emitter.emit("connected", othersIdentity)
+                    }
 
                     if (message.label == "ACK") {
-                        let sentMessage = this.unacknowledgedMessages.get(message.id)
-                        this.unacknowledgedMessages.delete(message.id)
-                        this.emitter.emit("sent", sentMessage)
+                        if(this.unacknowledgedMessages.has(message.communicationLevelId)){
+                            let sentMessage = this.unacknowledgedMessages.get(message.communicationLevelId)
+                            this.unacknowledgedMessages.delete(message.communicationLevelId)
+                            client.log({
+                                componentId:this.componentId,
+                                messageId:message.communicationLevelId,
+                                eventName:"acknowledged",
+                                eventValue:"true"
+                            })
+                            console.log("[HYPERSWARM] acknowledged message ",message)
+                            this.emitter.emit("sent", sentMessage)
+                        }
                         return;
                     }
 
                     //sending acknowledgement
                     let ackMessage = {
                         label: "ACK",
-                        id: message.id
+                        communicationLevelId: message.communicationLevelId
                     }
-                    socket.write(JSON.stringify(ackMessage) + "\n")
+                    //we acknowledge on the latest socket connection
+                    let latestSocket = this.idSocketMapping.get(othersIdentity.id)
+                    //wont hurt to send the acknowledgement twice just to be sure, or even thrice- it will increase network traffic tho
+                    latestSocket.write(JSON.stringify(ackMessage) + "\n")
 
-                    this.emitter.emit("received", message)
+                    if(!this.encounteredMessages.has(message.communicationLevelId)){
+                        this.encounteredMessages.add(message.communicationLevelId)
+                        console.log("[HYPERSWARM] received message ",message)
+                        this.emitter.emit("received", message)
+                    }
                 });
 
             socket.on("error", (error) => {
@@ -155,43 +175,66 @@ class Hyperswarm {
 
     //we only emit a disconnect if the timeout(ack or otherwise) occurs on the latest connection
     disconnect(id) {
-        if(this.idKeyMapping.has(id)){
-            let key = this.idKeyMapping.get(id);
-            this.idKeyMapping.delete(id);
-            this.keySocketMapping.delete(key);
-
-            if(this.idKeyMapping.size == 0){
-                this.swarm.join(this.topic, {
-                    announce: true,
-                    lookup: true
-                });
-            }
-
+        this.swarm.join(this.topic, {
+            announce: true,
+            lookup: true
+        });
+        if(this.idSocketMapping.has(id)){
+            this.idSocketMapping.delete(id)
             this.emitter.emit("disconnected", this.idIdentityMapping.get(id));
             console.log("[HYPERSWARM] disconnected ",id);   
         }     
     }
 
     send(message) {
-        if(!this.idKeyMapping.has(message.receiver)){
+        //communication level id's must be unique
+        message.communicationLevelId = message.communicationLevelId ||  utils.getRandomId();
+        message.resendAttempts = message.resendAttempts || 0;
+        
+        if(!this.idSocketMapping.has(message.receiver)){
             this.emitter.emit("dropped", message)
             return;
         }
 
-        let receiverKey = this.idKeyMapping.get(message.receiver)
-        let receiverSocket = this.keySocketMapping.get(receiverKey);
+        let receiverSocket = this.idSocketMapping.get(message.receiver);
+
+        client.log({
+            componentId:this.componentId,
+            messageId:message.communicationLevelId,
+            eventName:"send",
+            eventValue:"true"
+        })
+        console.log("[HYPERSWARM] sending message ",message)
         receiverSocket.write(JSON.stringify(message) + "\n");
 
         //if the message is unacknowledged after timeout seconds, drop the message and disconnect peer
-        this.unacknowledgedMessages.set(message.id, message);
+        this.unacknowledgedMessages.set(message.communicationLevelId, message);
         setTimeout(() => {
-            if (this.unacknowledgedMessages.has(message.id)) {
-                this.unacknowledgedMessages.delete(message.id)
+            if (this.unacknowledgedMessages.has(message.communicationLevelId)) {
+                //attempt resend
+                if(message.resendAttempts < this.maxResendAttempts){
+                    message.resendAttempts = message.resendAttempts + 1;
+                    this.send(message)
+                    return;
+                }
+
+                //if we have exhausted our resend attempts
+                this.unacknowledgedMessages.delete(message.communicationLevelId)
                 console.log("[Hyperswarm] ACK timeout occured on connection ",receiverSocket.connectionId)
+                console.log("unacked message ",message)
                 if(receiverSocket.connectionId == this.idLatestConnectionIdMapping.get(message.receiver)){
                     this.disconnect(message.receiver)
                 }
+                client.log({
+                            componentId:this.componentId,
+                            messageId:message.communicationLevelId,
+                            eventName:"acknowledged",
+                            eventValue:"false"
+                        })
+                console.log("[HYPERSWARM] dropped message ",message)
                 this.emitter.emit("dropped", message)
+                console.log("droppage detected",message)
+                // process.exit()
             }
         }, this.timeout);
     }

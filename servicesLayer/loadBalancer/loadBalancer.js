@@ -123,9 +123,9 @@ class LoadBalancer {
     }
 
     canAccept() {
-        const loadFactor = 1 / (1 + this.currentLoad);
+        const loadFactor = 1 / Math.pow(1 + this.currentLoad, 6);
         const degreeFactor = 1 / (1 + this.connectedPeers.size)
-        const factorOfAcceptance = 0.9 * loadFactor + 0.1 * degreeFactor;
+        const factorOfAcceptance = 0.95 * loadFactor + 0.05 * degreeFactor;
         return Math.random() <= factorOfAcceptance
     }
 

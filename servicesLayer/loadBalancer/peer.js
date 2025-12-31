@@ -15,7 +15,7 @@ let router = new Router({
                 identity:{
                     id:id
                 },
-                topic:"DSFLoadBalancer"
+                topic:"DSF",
             })
         })
     })
@@ -25,7 +25,7 @@ let loadBalancer = new LoadBalancer({
         id:id
     },
     callback:async(request)=>{
-        await new Promise(resolve => setTimeout(resolve, 10000));
+        await new Promise(resolve => setTimeout(resolve, 6000));
         return { message: "some response" };
     },
     adapter:router,
@@ -39,6 +39,6 @@ if(id == "A"){
             meow:"some request",
         })
         console.log("[PEER] response ", response)
-    },300)
+    },1)
 },0)
 }
