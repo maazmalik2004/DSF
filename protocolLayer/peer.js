@@ -1,12 +1,11 @@
 import Hyperswarm from "../messagingLayer/communication/communicationAdapters/hyperswarm.js";
 import Queue from "../messagingLayer/queuing/queuingAdapters/byassQueue.js";
-// import Queue from "../messagingLayer/queuing/queuingAdapters/queue.js";
 
 import Router from "./routing/routing.js";
 import { ulid } from "ulid";
 
 import fs from "fs";
-import visualizer from "./utils.js";
+import { count } from "console";
 
 // Read topology
 let topology = JSON.parse(fs.readFileSync("./protocolLayer/topology.json", "utf-8"));
@@ -37,75 +36,80 @@ console.log(`Starting node with identity: ${JSON.stringify(identity)}`);
 
 // Initialize communication layer
 let communication = new Hyperswarm({
-    topic: "maaz",
+    topic: "DSFNewRouter",
     identity: identity,
-    allowedNeighbours: topology[identity.id]
+    allowedNeighbours: new Set(topology[identity.id])
 });
 
 // Initialize queue and router
 let queue = new Queue({
-    communicationAdapter: communication
+    adapter: communication
 });
 
 let router = new Router({
     identity: identity,
-    messagingAdapter: queue
+    adapter: queue
 });
 
-// Track connected peers (start with self to avoid self-messaging)
-let connectedPeers = new Set([nodeId]); // Initialize with self
-
-// Event listeners
+let connectedCount = 0;
 router.on("connected", (remoteIdentity) => {
-    //visualizer.registerConnect(remoteIdentity.id, identity.id);
-    connectedPeers.add(remoteIdentity.id);
+    connectedCount++;
     console.log("[CONNECTED]", remoteIdentity);
 });
 
 router.on("disconnected", (remoteIdentity) => {
-    //visualizer.deleteConnect(remoteIdentity.id, identity.id);
-    connectedPeers.delete(remoteIdentity.id);
     console.log("[DISCONNECTED]", remoteIdentity);
 });
 
-router.on("error", (error) => {
-    console.log("[ERROR]", error);
-});
+// router.on("error", (error) => {
+//     console.log("[ERROR]", error);
+// });
 
-router.on("reachable", (id) => {
-    console.log("[REACHABLE]", id);
-});
+// router.on("reachable", (id) => {
+//     console.log("[REACHABLE]", id);
+// });
 
-router.on("unreachable", (id) => {
-    console.log("[UNREACHABLE]", id);
-});
+// router.on("unreachable", (id) => {
+//     console.log("[UNREACHABLE]", id);
+// });
+let counts = {
+    attempted:0,
+    sent:0,
+    received:0,
+    dropped:0
+}
 
 router.on("sent", (message) => {
-    //visualizer.logEvent(message.id, 3);
+    counts.sent++;
+    console.log(counts)
     console.log("[SENT]", message);
 });
 
 router.on("dropped", (message) => {
-    //visualizer.logEvent(message.id, 4, null, null, message.reason);
+    counts.dropped++;
+    console.log(counts)
     console.log("[DROPPED]", message);
 });
 
 router.on("received", (message) => {
-    //visualizer.logEvent(message.id, 2);
+    counts.received++;
+    console.log(counts)
     console.log("[RECEIVED]", message);
 });
 
-// Periodically send messages to all known connected peers
-setInterval(() => {
-    for (let peer of connectedPeers) {
-        if (peer === identity.id) continue; // Skip self
 
-        let messageId = ulid();
-        //visualizer.logEvent(messageId, 1, identity.id, peer);
+if(nodeId == "A"){  
+    // setTimeout(() => {
+    //         router.send({
+    //             target: "F",
+    //         });
+    // }, 20000);
+    setInterval(() => {
+        if(connectedCount == 0)return;
+        counts.attempted++;
+        console.log(counts)
         router.send({
-            id: messageId,
-            sender: identity.id,
-            receiver: peer,
+            target: "F",
         });
-    }
-}, 2000);
+    }, 25);
+}

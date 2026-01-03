@@ -4,6 +4,7 @@ import {
 import {
     EventEmitter
 } from "node:events";
+import client from "./client.js";
 
 class Election {
     constructor(object) {
@@ -18,19 +19,26 @@ class Election {
         this.adapter = object.adapter
 
         this.adapter.on("connected", (identity) => {
+            client.add(this.identity.id, identity.id)
             this.connectedPeers.add(identity.id);
         });
 
         this.adapter.on("disconnected", (identity) => {
+            client.remove(this.identity.id, identity.id)
             this.connectedPeers.delete(identity.id);
         });
 
         this.adapter.on("received", (message) => {
 
             if (message.payload.label == "ELECTION") {
+                console.log("[ELECTION] received election message ", message)
 
-                if (this.encounteredElections.has(message.payload.electionId)) return;
+                if (this.encounteredElections.has(message.payload.electionId)) {
+                    console.log("[ELECTION] blocked election message ", message.payload.electionId)
+                };
                 this.encounteredElections.add(message.payload.electionId);
+
+                console.log("[ELECTION] election message passed through")
 
                 for (const peer of this.connectedPeers) {
                     if (peer == message.sender) continue;
@@ -47,6 +55,7 @@ class Election {
                         randomDraw: Math.random()
                     }
                 };
+                console.log("[ELECTION] sending election ack", electionAckMessage)
                 this.adapter.send(electionAckMessage);
             } else if (message.payload.label == "ELECTION-ACK") {
                 const electionId = message.payload.electionId

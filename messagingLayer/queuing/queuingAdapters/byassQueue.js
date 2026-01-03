@@ -41,6 +41,10 @@ class BypassQueue {
         this.adapter.send(message)
     }
 
+    send(message){
+        this.enqueue(message)
+    }
+
     on(eventName, callback) {
         this.emitter.on(eventName, callback);
     }

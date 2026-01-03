@@ -18,6 +18,7 @@ let counts = {
 }
 
 adapter.on("connected", identity => {
+    console.log("[CONNECTED]",identity)
     connectedPeers.add(identity.id)
     // setTimeout(()=>{
     //     process.exit()
@@ -25,6 +26,7 @@ adapter.on("connected", identity => {
 })
 
 adapter.on("disconnected", identity => {
+    console.log("[DISCONNECTED]",identity)
     connectedPeers.delete(identity.id)
 })
 
@@ -43,15 +45,15 @@ adapter.on("sent", message => {
     console.log(counts)
 })
 
-if(id == "A"){
-    setInterval(()=>{
-        for(let peer of connectedPeers){
-            adapter.send({
-                id:JSON.stringify(Date.now()),
-                receiver:peer,
-                message:"HELLO WORLD",
-                seq:counts.sent
-            })
-        }
-    },1);
-}
+// if(id == "A"){
+//     setInterval(()=>{
+//         for(let peer of connectedPeers){
+//             adapter.send({
+//                 id:JSON.stringify(Date.now()),
+//                 receiver:peer,
+//                 message:"HELLO WORLD",
+//                 seq:counts.sent
+//             })
+//         }
+//     },1);
+// }

@@ -32,13 +32,26 @@ let loadBalancer = new LoadBalancer({
     name:"myRouter"
 });
 
+let counts = {
+    totalCount: 0,
+    successCount : 0
+}
+
 if(id == "A"){
     setTimeout(()=>{
      setInterval(async ()=>{
+        counts.totalCount++;
         let response = await loadBalancer.send({
             meow:"some request",
         })
+    
         console.log("[PEER] response ", response)
-    },1)
+        if(response.status != "FAILURE"){
+            counts.successCount++;
+        }else{
+            console.log("ULULU")
+        }
+        console.log("[APP] counts",counts)
+    },3000)
 },0)
 }

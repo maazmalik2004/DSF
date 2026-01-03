@@ -18,7 +18,7 @@ let election = new App({
                 identity:{
                     id:id
                 },
-                topic:"myTopic"
+                topic:"DSFelection"
             })
         })
     })
@@ -34,7 +34,7 @@ election.on("crowned", ({ electionId }) => {
 
 if(id == "A"){
     setTimeout(async()=>{
-        let result = await election.elect(5);
+        let result = await election.elect(3);
         console.log("Initiator sees result:", result.elected);
     },10000)
 }
