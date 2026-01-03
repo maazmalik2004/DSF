@@ -8,7 +8,6 @@ class Hyperswarm {
     constructor(object) {
         this.allowedNeighbours = object.allowedNeighbours || null;
         console.log(this.allowedNeighbours)
-        this.componentId = object.componentId || "Hyperswarm-default";
         this.emitter = new EventEmitter();
 
         this.timeout = object.timeout || 2000;
