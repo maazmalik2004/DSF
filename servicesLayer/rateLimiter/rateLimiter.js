@@ -12,17 +12,14 @@ class RateLimiter {
 
     async send(request) {
         if (this.tokens == 0) {
-            return {
-                status:"REJECTED"
-            };
+            console.log("[RATE-LIMITER] rate limit exeeded, request dropped")
+            return null
         }
 
         this.tokens = this.tokens - 1;
         let response = await this.adapter.send(request)
-        return {
-            status:"ACCEPTED",
-            response:response
-        };
+        console.log("[RATE-LIMITER] request accepted ",response)
+        return response
     }
 }
 

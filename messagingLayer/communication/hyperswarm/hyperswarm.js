@@ -3,7 +3,6 @@ import {EventEmitter} from "node:events";
 import crypto from "crypto";
 import split2 from 'split2';
 import utils from "../../../utils/utils.js"
-import client from "./client.js"
 
 class Hyperswarm {
     constructor(object) {
@@ -108,12 +107,7 @@ class Hyperswarm {
                         if(this.unacknowledgedMessages.has(message.communicationLevelId)){
                             let sentMessage = this.unacknowledgedMessages.get(message.communicationLevelId)
                             this.unacknowledgedMessages.delete(message.communicationLevelId)
-                            client.log({
-                                componentId:this.componentId,
-                                messageId:message.communicationLevelId,
-                                eventName:"acknowledged",
-                                eventValue:"true"
-                            })
+                    
                             ////console.log("[HYPERSWARM] acknowledged message ",message)
                             this.emitter.emit("sent", sentMessage)
                         }
@@ -200,12 +194,7 @@ class Hyperswarm {
 
         let receiverSocket = this.idSocketMapping.get(message.receiver);
 
-        client.log({
-            componentId:this.componentId,
-            messageId:message.communicationLevelId,
-            eventName:"send",
-            eventValue:"true"
-        })
+     
         ////console.log("[HYPERSWARM] sending message ",message)
         receiverSocket.write(JSON.stringify(message) + "\n");
 
@@ -227,12 +216,7 @@ class Hyperswarm {
                 if(receiverSocket.connectionId == this.idLatestConnectionIdMapping.get(message.receiver)){
                     this.disconnect(message.receiver)
                 }
-                client.log({
-                            componentId:this.componentId,
-                            messageId:message.communicationLevelId,
-                            eventName:"acknowledged",
-                            eventValue:"false"
-                        })
+               
                 ////console.log("[HYPERSWARM] dropped message ",message)
                 this.emitter.emit("dropped", message)
                 console.log("[Hyperswarm] droppage detected",message)

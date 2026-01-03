@@ -1,6 +1,5 @@
 import {EventEmitter} from "node:events";
 import utils from "../../utils/utils.js"
-import client from "./client.js"
 
 class LoadBalancer {
     constructor(object) {
@@ -12,7 +11,6 @@ class LoadBalancer {
         this.connectedPeers = new Set();
         this.requestIdDeferredPromiseMapping = new Map();
         this.currentLoad = 0;
-        this.componentId = "LoadBalancer" + "-" + (object.name || "default")
 
         this.adapter.on("connected", identity => {
             console.log("[LOAD BALANCER] connected ", identity.id)
@@ -25,6 +23,14 @@ class LoadBalancer {
         })
 
         this.adapter.on("received", async(message) => {
+            message = {
+                ...message.applicationMessage,
+                source:message.source,
+                target:message.target,
+                sender:message.sender,
+                receiver:message.receiver
+            }
+            console.log("[LOAD-BALANCER] transformed message")
             
             if (message.payload.label == "REQUEST") {
                 if (this.canAccept() || message.payload.token == this.identity.id) {
@@ -34,7 +40,7 @@ class LoadBalancer {
                     this.currentLoad = this.currentLoad - 1;
                     
                     let responseMessage = {
-                        receiver: message.payload.hitAt,
+                        target: message.payload.hitAt,
                         payload: {
                             label: "RESPONSE",
                             requestId:message.payload.requestId,
@@ -47,14 +53,14 @@ class LoadBalancer {
                     return;
                 }
 
-                let peers = [...this.connectedPeers].filter(peer => peer !== message.sender);
+                let peers = [...this.connectedPeers].filter(peer => peer !== message.source);
                 if (peers.length == 0) {
                     console.log("[APP] reached deadend, allowing sending back", message)
-                    peers.push(message.sender);
+                    peers.push(message.source);
                 }
 
                 const chosenNeighbour = peers[Math.floor(Math.random() * peers.length)];
-                message.receiver = chosenNeighbour;
+                message.target = chosenNeighbour;
                 console.log("[APP] forwarding request ", message)
                 this.adapter.relay(message);
             }
@@ -64,18 +70,6 @@ class LoadBalancer {
                 if(!requestPromise)return;
                 requestPromise.resolve(message.payload.response)
                 this.requestIdDeferredPromiseMapping.delete(message.payload.requestId)
-                client.log({
-                    componentId:this.componentId,
-                    messageId:message.payload.requestId,
-                    eventName:"response",
-                    eventValue:"true"
-                })
-                client.log({
-                    componentId:this.componentId,
-                    messageId:message.payload.requestId,
-                    eventName:"processed_by",
-                    eventValue:message.payload.token
-                })
                 console.log("[APP] response ", message)
             }
 
@@ -88,20 +82,21 @@ class LoadBalancer {
                     requestId:message.payload.requestId
                 })
                 this.requestIdDeferredPromiseMapping.delete(message.payload.requestId)
-                client.log({
-                    componentId:this.componentId,
-                    messageId:message.payload.requestId,
-                    eventName:"failure",
-                    eventValue:"true"
-                })
             }
         })
 
         this.adapter.on("dropped", message => {
-            console.log("[LOAD BALANCER] dropped ",message)
+            message = {
+                ...message.applicationMessage,
+                source:message.source,
+                target:message.target,
+                sender:message.sender,
+                receiver:message.receiver
+            }
+            console.log("[LOAD-BALANCER] transformed message", message)
             if(message.payload.label == "REQUEST"){
                 let failureMessage = {
-                    receiver:message.payload.hitAt,
+                    target:message.payload.hitAt,
                     payload:{
                         label:"FAILURE",
                         requestId:message.payload.requestId
@@ -111,7 +106,7 @@ class LoadBalancer {
             }
             if(message.payload.label == "RESPONSE"){
                 let failureMessage = {
-                    receiver:message.target,
+                    target:message.target,
                     payload:{
                         label:"FAILURE",
                         requestId:message.payload.requestId
@@ -157,17 +152,11 @@ class LoadBalancer {
         }
 
         console.log("[LOAD-BALANCER] sending request... ", message)
-        client.log({
-            componentId:this.componentId,
-            messageId:requestId,
-            eventName:"request",
-            eventValue:"true"
-        })
-
+       
         // case 1, request has a token
         if (request.token) {
             message.payload.token = request.token
-            message.receiver = request.token;
+            message.target = request.token;
             this.adapter.relay(message);
             return requestPromise.promise;
         }
@@ -180,7 +169,7 @@ class LoadBalancer {
             this.currentLoad = this.currentLoad - 1;
             
             let responseMessage = {
-                receiver: message.payload.hitAt,
+                target: message.payload.hitAt,
                 payload: {
                     requestId:message.payload.requestId,
                     label: "RESPONSE",
@@ -196,7 +185,7 @@ class LoadBalancer {
         //initiate random walk
         const peerIds = [...this.connectedPeers];
         const chosenNeighbour = peerIds[Math.floor(Math.random() * peerIds.length)];
-        message.receiver = chosenNeighbour;
+        message.target = chosenNeighbour;
         this.adapter.relay(message);
         return requestPromise.promise;
     }

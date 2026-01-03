@@ -4,8 +4,6 @@ import {
 import {
     EventEmitter
 } from "node:events";
-import client from "./client.js";
-import { application } from "express";
 
 class Election {
     constructor(object) {
@@ -20,12 +18,12 @@ class Election {
         this.adapter = object.adapter
 
         this.adapter.on("connected", (identity) => {
-            // client.add(this.identity.id, identity.id)
+            console.log("[ELECTION] connected ",identity.id)
             this.connectedPeers.add(identity.id);
         });
 
         this.adapter.on("disconnected", (identity) => {
-            // client.remove(this.identity.id, identity.id)
+            console.log("[ELECTION] disconnected ",identity.id)
             this.connectedPeers.delete(identity.id);
         });
 

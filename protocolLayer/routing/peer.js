@@ -1,11 +1,7 @@
-import Hyperswarm from "../messagingLayer/communication/communicationAdapters/hyperswarm.js";
-import Queue from "../messagingLayer/queuing/queuingAdapters/byassQueue.js";
-
-import Router from "./routing/routing.js";
-import { ulid } from "ulid";
-
+import Hyperswarm from "../messagingLayer/communication/hyperswarm/hyperswarm.js";
+import Queue from "../messagingLayer/queuing/byassQueue/byassQueue.js";
+import Router from "./routing.js";
 import fs from "fs";
-import { count } from "console";
 
 // Read topology
 let topology = JSON.parse(fs.readFileSync("./protocolLayer/topology.json", "utf-8"));

@@ -54,7 +54,7 @@ class Router{
                 for(let i = 0;i<=message.trace.length-2;i++){
                     let inferredPath = message.trace.slice(i, message.trace.length);
                     inferredPath.reverse();
-                    //console.log("[ROUTER] inferred path ",message.trace[i]+"=>"+inferredPath);
+                    console.log("[ROUTER] inferred path ",message.trace[i]+"=>"+inferredPath);
                     this.targetPathMapping.set(message.trace[i], inferredPath);
 
                     if(!this.reachablePeers.has(message.trace[i])){
@@ -69,7 +69,7 @@ class Router{
                         item.nextHopIndex = 1;
                         item.sender = this.identity.id
                         item.receiver = item.path[1];
-                        //console.log("[ROUTER] sending pending message ",item)
+                        console.log("[ROUTER] sending pending message ",item)
                         this.adapter.send(item);
                     }
                 }
@@ -78,20 +78,20 @@ class Router{
                 this.encounteredTraces.add(message.id);
 
                 if(message.target == this.identity.id){
-                    //console.log("[ROUTER] received trace message, initiating retrace", message)
+                    console.log("[ROUTER] received trace message, initiating retrace", message)
                     let retraceMessage = {
                         label:"RETRACE",
                         id:message.id,
                         source:this.identity.id,
                         target:message.source
                     }
-                    //console.log("[ROUTER] sending retrace message ", retraceMessage)
+                    console.log("[ROUTER] sending retrace message ", retraceMessage)
                     this.helperRelay(retraceMessage);
                     return;
                 }
 
                 //flood ahead
-                //console.log("[ROUTER] received and flooding trace message", message)
+                console.log("[ROUTER] received and flooding trace message", message)
                 let originalSender = message.sender;
                 message.sender = this.identity.id;
                 for(let peer of this.connectedPeers){
@@ -106,7 +106,7 @@ class Router{
                 for(let i = 0; i<message.nextHopIndex; i++){
                     let inferredPath = message.path.slice(i, message.nextHopIndex+1);
                     inferredPath.reverse();
-                    //console.log("[ROUTER] inferred path during retrace",message.path[i]+"=>"+inferredPath);
+                    console.log("[ROUTER] inferred path during retrace",message.path[i]+"=>"+inferredPath);
                     this.targetPathMapping.set(message.path[i], inferredPath);
 
                     if(!this.reachablePeers.has(message.path[i])){
@@ -121,14 +121,14 @@ class Router{
                         item.nextHopIndex = 1;
                         item.sender = this.identity.id
                         item.receiver = inferredPath[1];
-                        //console.log("[ROUTER] sending pending message ",item)
+                        console.log("[ROUTER] sending pending message ",item)
                         this.adapter.send(item);
                     }
                 }
 
                 if(message.target == this.identity.id){
                     this.unresolvedTraces.delete(message.id)
-                    //console.log("[ROUTER] received retrace message")
+                    console.log("[ROUTER] received retrace message")
                     return;
                 }
 
@@ -136,14 +136,14 @@ class Router{
                 message.nextHopIndex = message.nextHopIndex + 1;
                 message.receiver = message.path[message.nextHopIndex];
 
-                //console.log("[ROUTER] forwarding retrace message ", message)
+                console.log("[ROUTER] forwarding retrace message ", message)
                 this.adapter.send(message);
                 return;
             }
             if(message.label == "RELAY"){
                 //if it is intended for me
                 if(message.target == this.identity.id){
-                    //console.log("[ROUTER] received message",message);
+                    console.log("[ROUTER] received message",message);
                     this.emitter.emit("received", message);
                     let relayAckMessage={
                         label:"RELAY-ACK",
@@ -151,12 +151,12 @@ class Router{
                         source:this.identity.id,
                         target:message.source
                     }
-                    //console.log("[ROUTER] sending relay ack ", relayAckMessage)
+                    console.log("[ROUTER] sending relay ack ", relayAckMessage)
                     this.helperRelay(relayAckMessage)
                     return;
                 }
 
-                //console.log("[ROUTER] received message to forward",message);
+                console.log("[ROUTER] received message to forward",message);
                 //MREPF- Most Recently Encountered Path First
                 message.sender = this.identity.id;
                 if(this.targetPathMapping.has(message.target)){
@@ -169,13 +169,13 @@ class Router{
                     message.receiver = message.path[message.nextHopIndex];
                 }
 
-                //console.log("[ROUTER] forwarding relay message",message);
+                console.log("[ROUTER] forwarding relay message",message);
                 this.adapter.send(message)
                 return;
             }
             if(message.label == "RELAY-ACK"){
                 if(message.target == this.identity.id){
-                    //console.log("[ROUTER] received relay ack", message)
+                    console.log("[ROUTER] received relay ack", message)
                     let originalMessage = this.unresolvedRelays.get(message.id)
                     this.unresolvedRelays.delete(message.id)
                     this.emitter.emit("sent", originalMessage);
@@ -186,12 +186,12 @@ class Router{
                 message.nextHopIndex = message.nextHopIndex+1;
                 message.receiver = message.path[message.nextHopIndex];
 
-                //console.log("[ROUTER] forwarding relay ACK", message)
+                console.log("[ROUTER] forwarding relay ACK", message)
                 this.adapter.send(message)
             }
             if(message.label == "RELAY-NACK"){
                 if(message.target == this.identity.id){
-                    //console.log("[ROUTER] received relay nack ", message)
+                    console.log("[ROUTER] received relay nack ", message)
                     let originalMessage = this.unresolvedRelays.get(message.id)
                     this.targetPathMapping.delete(originalMessage.target);
                     this.emitter.emit("dropped", originalMessage);
@@ -202,27 +202,27 @@ class Router{
                 message.nextHopIndex = message.nextHopIndex+1;
                 message.receiver = message.path[message.nextHopIndex];
 
-                //console.log("[ROUTER] forwarding relay NACK", message)
+                console.log("[ROUTER] forwarding relay NACK", message)
                 this.adapter.send(message)
             }
         })
 
         this.adapter.on("dropped",message => {
-            //console.log("[ROUTER] dropped message ", message)
+            console.log("[ROUTER] dropped message ", message)
             message.reroutingAttempts = message.reroutingAttempts || 0;
             this.targetPathMapping.delete(message.target)
 
             if(message.label == "RELAY"){
                 //attempt reroute
                 if(message.reroutingAttempts < this.maxReroutingAttempts){
-                    //console.log("[ROUTER] attempting rerouting on message ",message)
+                    console.log("[ROUTER] attempting rerouting on message ",message)
                     message.reroutingAttempts = message.reroutingAttempts + 1;
                     this.helperRelay(message)
                     return;
                 }
 
                 //send nack
-                //console.log("[ROUTER] dropped message ", message)
+                console.log("[ROUTER] dropped message ", message)
                 let relayNackMessage = {
                     label:"RELAY-NACK",
                     id:message.id,
@@ -230,14 +230,14 @@ class Router{
                     target:message.source,
                     sender:this.identity.id,
                 }
-                //console.log("[ROUTER] sending nack ", relayNackMessage)
+                console.log("[ROUTER] sending nack ", relayNackMessage)
                 this.helperRelay(relayNackMessage)
             }
 
             if(message.label == "RELAY-ACK"){
                 //attempt reroute
                 if(message.reroutingAttempts < this.maxReroutingAttempts){
-                    //console.log("[ROUTER] attempting rerouting on message ",message)
+                    console.log("[ROUTER] attempting rerouting on message ",message)
                     message.reroutingAttempts = message.reroutingAttempts + 1;
                     this.helperRelay(message)
                 }
@@ -247,7 +247,7 @@ class Router{
             if(message.label == "RELAY-NACK"){
                 //attempt reroute
                 if(message.reroutingAttempts < this.maxReroutingAttempts){
-                    //console.log("[ROUTER] attempting rerouting on message ",message)
+                    console.log("[ROUTER] attempting rerouting on message ",message)
                     message.reroutingAttempts = message.reroutingAttempts + 1;
                     this.helperRelay(message)
                 }
@@ -274,12 +274,12 @@ class Router{
 
         for(let peer of this.connectedPeers){
             traceMessage.receiver = peer; 
-            //console.log("[ROUTER] flooding trace message ", traceMessage)
+            console.log("[ROUTER] flooding trace message ", traceMessage)
             this.adapter.send(traceMessage);
         }
 
         setTimeout(()=>{
-            //console.log("[ROUTER] trace timeout occured ", traceId)
+            console.log("[ROUTER] trace timeout occured ", traceId)
             if(this.unresolvedTraces.has(traceId)){
                 this.unresolvedTraces.delete(traceId);
                 
@@ -310,14 +310,14 @@ class Router{
     helperRelay(message){
         //loopback
         if(message.target == this.identity.id){
-            //console.log("[ROUTER] message in helper relay loopback condition ", message)
+            console.log("[ROUTER] message in helper relay loopback condition ", message)
             if(message.label == "RELAY-ACK"){
-                //console.log("[ROUTER] received relay ack ",message)
+                console.log("[ROUTER] received relay ack ",message)
                 this.emitter.emit("sent", this.unresolvedRelays.get(message.id))
                 this.unresolvedRelays.delete(message.id)
             }
             if(message.label == "RELAY-NACK"){
-                //console.log("[ROUTER] received relay nack ",message)
+                console.log("[ROUTER] received relay nack ",message)
                 let originalMessage = this.unresolvedRelays.get(message.id)
                 this.unresolvedRelays.delete(message.id)
                 this.targetPathMapping.delete(originalMessage.target)
@@ -357,7 +357,7 @@ class Router{
 
         //loopback- no relay acknowledgement needed
         if(message.target == this.identity.id){
-            //console.log("[ROUTER] loopback triggered ",message)
+            console.log("[ROUTER] loopback triggered ",message)
             let relayId = message.id || utils.getRandomId();
             let relayMessage = {
                 label:"RELAY",
@@ -389,7 +389,7 @@ class Router{
                 applicationMessage:message,
             }
             this.unresolvedRelays.set(relayId, relayMessage)
-            //console.log("[ROUTER] sending relay message ",relayMessage)
+            console.log("[ROUTER] sending relay message ",relayMessage)
             this.adapter.send(relayMessage);
         }else{
             let relayId = message.id || utils.getRandomId();
@@ -404,7 +404,7 @@ class Router{
 
             this.unresolvedRelays.set(relayId, relayMessage)
             
-            //console.log("[ROUTER] pushing relay message to pending ",relayMessage)
+            console.log("[ROUTER] pushing relay message to pending ",relayMessage)
             let pendingMessages = this.targetPendingMessagesMapping.get(message.target)||[];
             pendingMessages.push(relayMessage)
             this.targetPendingMessagesMapping.set(message.target,pendingMessages);
