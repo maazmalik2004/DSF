@@ -34,7 +34,7 @@ election.on("crowned", ({ electionId }) => {
 
 if(id == "A"){
     setTimeout(async()=>{
-        let result = await election.elect(3);
+        let result = await election.elect(5);
         console.log("Initiator sees result:", result.elected);
-    },10000)
+    },20000)
 }

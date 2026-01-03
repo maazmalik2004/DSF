@@ -5,12 +5,13 @@ import {
     EventEmitter
 } from "node:events";
 import client from "./client.js";
+import { application } from "express";
 
 class Election {
     constructor(object) {
         this.emitter = new EventEmitter();
         this.identity = object.identity;
-        this.deadline = object.deadline || 5000;
+        this.deadline = object.deadline || 10000;
         this.connectedPeers = new Set();
         this.electionContexts = new Map();
         this.encounteredElections = new Set();
@@ -19,35 +20,46 @@ class Election {
         this.adapter = object.adapter
 
         this.adapter.on("connected", (identity) => {
-            client.add(this.identity.id, identity.id)
+            // client.add(this.identity.id, identity.id)
             this.connectedPeers.add(identity.id);
         });
 
         this.adapter.on("disconnected", (identity) => {
-            client.remove(this.identity.id, identity.id)
+            // client.remove(this.identity.id, identity.id)
             this.connectedPeers.delete(identity.id);
         });
 
         this.adapter.on("received", (message) => {
 
+            console.log("[election] ululu received ", message)
+            message = {
+                ...message.applicationMessage,
+                source:message.source,
+                target:message.target,
+                sender:message.sender,
+                receiver:message.receiver
+            }
+            console.log("[ELECTION] after message transformation")
+            
             if (message.payload.label == "ELECTION") {
                 console.log("[ELECTION] received election message ", message)
 
                 if (this.encounteredElections.has(message.payload.electionId)) {
                     console.log("[ELECTION] blocked election message ", message.payload.electionId)
+                    return;
                 };
                 this.encounteredElections.add(message.payload.electionId);
 
                 console.log("[ELECTION] election message passed through")
 
                 for (const peer of this.connectedPeers) {
-                    if (peer == message.sender) continue;
-                    message.receiver = peer;
+                    if (peer == message.source) continue;
+                    message.target = peer;
                     this.adapter.send(message);
                 }
 
                 const electionAckMessage = {
-                    receiver: message.payload.initiator,
+                    target: message.payload.initiator,
                     payload: {
                         label: "ELECTION-ACK",
                         electionId: message.payload.electionId,
@@ -72,7 +84,7 @@ class Election {
                     electionId
                 });
                 const crownAckMessage = {
-                    receiver: message.payload.initiator,
+                    target: message.payload.initiator,
                     payload: {
                         label: "ELECTION-CROWN-ACK",
                         electionId: electionId,
@@ -103,7 +115,7 @@ class Election {
                     };
 
                     for (const peer of this.connectedPeers) {
-                        announceMessage.receiver = peer
+                        announceMessage.target = peer
                         this.adapter.send(announceMessage);
                     }
 
@@ -127,8 +139,8 @@ class Election {
                 });
 
                 for (const peer of this.connectedPeers) {
-                    if (peer === message.sender) continue;
-                    message.receiver = peer
+                    if (peer === message.source) continue;
+                    message.target = peer
                     this.adapter.send(message);
                 }
             }
@@ -185,7 +197,7 @@ class Election {
         };
 
         for (const peer of this.connectedPeers) {
-            electionMessage.receiver = peer;
+            electionMessage.target = peer;
             this.adapter.send(electionMessage);
         }
 
@@ -236,7 +248,7 @@ class Election {
             };
 
             for (const candidate of elected) {
-                electionCrownMessage.receiver = candidate;
+                electionCrownMessage.target = candidate;
                 console.log("[ELECTION] sending crown message", electionCrownMessage)
                 this.adapter.send(electionCrownMessage);
             }
