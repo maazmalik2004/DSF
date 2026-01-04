@@ -2,13 +2,14 @@ import fs from "fs"
 
 class LocalStorage{
     constructor(object){
-        this.identifier = object.identifier
         this.basePath = "./servicesLayer/localStorage/" + object.identifier
-        fs.mkdirSync(this.basePath);
+        if(!fs.existsSync(this.basePath))fs.mkdirSync(this.basePath);
     }
 
     get(key){
-        let value = fs.readFileSync(this.basePath+"/"+key);
+        let path = this.basePath+"/"+key;
+        if(!fs.existsSync(path))return null
+        let value = fs.readFileSync(path);
         return JSON.parse(value);
     }
 

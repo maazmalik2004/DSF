@@ -91,43 +91,15 @@ class Election {
                 };
                 console.log("[ELECTION] sending crown acknowledgement", crownAckMessage)
                 this.adapter.send(crownAckMessage);
-            } else if (message.payload.label === "ELECTION-CROWN-ACK") {
+            } 
+            else if (message.payload.label === "ELECTION-CROWN-ACK") {
                 console.log("[ELECTION] received crown acknowledgement ", message)
                 const electionId = message.payload.electionId;
                 const context = this.electionContexts.get(electionId);
-
                 context.electionCrownAcks.add(message.payload.candidate);
-
-                // When all elected candidates have acknowledged, announce result
-                if (context.electionCrownAcks.size === context.elected.size) {
-                    const announcementId = ulid();
-                    this.encounteredAnnouncements.add(announcementId);
-
-                    const announceMessage = {
-                        payload: {
-                            label: "ELECTION-ANNOUNCE",
-                            electionId,
-                            announcementId,
-                            elected: Array.from(context.elected)
-                        }
-                    };
-
-                    for (const peer of this.connectedPeers) {
-                        announceMessage.target = peer
-                        this.adapter.send(announceMessage);
-                    }
-
-                    // Resolve initiator's promise
-                    context.electionPromise.resolve({
-                        electionId,
-                        elected: Array.from(context.elected)
-                    });
-
-                    // this.electionContexts.delete(electionId);
-                }
-
                 this.electionContexts.set(electionId, context);
-            } else if (message.payload.label === "ELECTION-ANNOUNCE") {
+            } 
+            else if (message.payload.label === "ELECTION-ANNOUNCE") {
                 if (this.encounteredAnnouncements.has(message.payload.announcementId)) return;
                 this.encounteredAnnouncements.add(message.payload.announcementId);
 
@@ -250,6 +222,43 @@ class Election {
                 console.log("[ELECTION] sending crown message", electionCrownMessage)
                 this.adapter.send(electionCrownMessage);
             }
+
+            setTimeout(async()=>{
+                const announcementId = ulid();
+                this.encounteredAnnouncements.add(announcementId);
+
+                const announceMessage = {
+                    payload: {
+                        label: "ELECTION-ANNOUNCE",
+                        electionId,
+                        announcementId,
+                        elected: Array.from(context.elected)
+                    }
+                };
+
+                for (const peer of this.connectedPeers) {
+                    announceMessage.target = peer
+                    this.adapter.send(announceMessage);
+                }
+
+                // let extra = [];
+                // if(context.elected.size < k){
+                //     extra = await this.elect(k-context.elected.size,{
+                //         exclude:Array.from(context.elected)
+                //     })
+                // }
+                // if(!extra) extra = [];
+
+                // for(let item of extra){
+                //     context.elected.add(item)
+                // }
+
+                // Resolve initiator's promise
+                context.electionPromise.resolve({
+                    electionId,
+                    elected: Array.from(context.elected)
+                });
+            },this.deadline)
         }, this.deadline);
 
         return promise;

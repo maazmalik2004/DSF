@@ -4,12 +4,13 @@ import Router from "../../protocolLayer/routing/routing.js";
 import LoadBalancer from "../../servicesLayer/loadBalancer/loadBalancer.js";
 import RateLimiter from "../../servicesLayer/rateLimiter/rateLimiter.js";
 import Election from "../../servicesLayer/election/election.js"
+import Identity from "../../servicesLayer/identity/identity.js";
 
 const id = process.argv[2];
-const identity = {
-    id:id,
-    name:id
-}
+
+const identity = new Identity({
+    static:true
+}).getIdentity()
 
 let topology = {
   "A": ["B"],
@@ -50,26 +51,28 @@ let rateLimiter = new RateLimiter({
     rate:15 //15 requests per second
 })
 
-// if(id == "A"){
-//     setInterval(async()=>{
-//         let response = await rateLimiter.send({
-//             message:"some request"
-//         })
-//         console.log(response)
+if(id == "A"){
+    setInterval(async()=>{
+        let response = await rateLimiter.send({
+            message:"some request"
+        })
+        console.log(response)
 
 
-//         if(response){
-//             if(response.status == "FAILURE"){
-//                 console.log("request was dropped")
-//             }else{
-//                 console.log("response", response)
-//             }
-//         }else{
-//             console.log("request was rate limited and dropped")
-//         }
-//     },50) //results to 20 req/sec, some will be dropped by the rate limiter
-// }
+        if(response){
+            if(response.status == "FAILURE"){
+                console.log("request was dropped")
+            }else{
+                console.log("response", response)
+            }
+        }else{
+            console.log("request was rate limited and dropped")
+        }
+    },50) //results to 20 req/sec, some will be dropped by the rate limiter
+}
 
+
+//leader/s election
 let election = new Election({
     identity:identity,
     adapter:router
@@ -77,9 +80,9 @@ let election = new Election({
 
 //peer A will initiate election
 if(id == "A"){
-    setInterval(async()=>{
+    setTimeout(async()=>{
         //elects 3 leaders
         let elected = await election.elect(3);
         console.log("initiator sees result ",elected)
-    },30000)
+    },30000) //we wait for the network to form
 }
