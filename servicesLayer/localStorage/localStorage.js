@@ -2,7 +2,7 @@ import fs from "fs"
 
 class LocalStorage{
     constructor(object){
-        this.basePath = "./servicesLayer/localStorage/" + object.identifier
+        this.basePath = "./servicesLayer/localStorage/" + (object.identifier||"DEFAULT")
         if(!fs.existsSync(this.basePath))fs.mkdirSync(this.basePath);
     }
 

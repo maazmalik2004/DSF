@@ -234,7 +234,7 @@ class Election {
                         announcementId,
                         elected: Array.from(context.elected)
                     }
-                };
+                };ggff 
 
                 for (const peer of this.connectedPeers) {
                     announceMessage.target = peer

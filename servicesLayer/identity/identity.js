@@ -3,7 +3,7 @@ import LocalStorage from "../localStorage/localStorage.js"
 
 class Identity{
     constructor(object){
-        this.static = object.static
+        this.static = object.static || true
         this.localStorage = new LocalStorage({
             identifier:"IDENTITY-LOCAL-STORAGE"
         })

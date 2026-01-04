@@ -1,0 +1,7 @@
+{
+    "name": "Alice Wonderland",
+    "age": 28,
+    "email": "alice@example.com",
+    "role": "admin",
+    "registered": true
+}
