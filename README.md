@@ -3,7 +3,13 @@ A framework for building intuitive distributed applications as if it were a regu
 
 <img width="1417" height="253" alt="DSF (2)" src="https://github.com/user-attachments/assets/972c3a7e-6e12-4a7c-bbd1-e3d7a0d957bf" />
 
-## Creating a Distributed Application- ApplicationLayer/myApp/peer.js
+## Creating a Distributed Application
+### Setting Up Your Project
+```TERMINAL
+>  npm init -y
+>  npm install dsf-toolkit
+```
+
 ### Building Your Stack
 
 #### 1) Identity Service- Provides a unique identity to a peer
@@ -72,7 +78,6 @@ setTimeout(async()=>{
   console.log("[APP] initiator sees result ",elected)
 },30000) //we wait for the peers to connect
 ```
-
 ```TERMINAL
 >  node app.js
 initiator sees result  {
@@ -190,4 +195,5 @@ console.log(localStorage.get("alice"));
 4) cache
 5) firewall
 6) container orchestration
+
 
