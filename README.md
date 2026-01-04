@@ -8,19 +8,25 @@ A framework for building intuitive distributed applications as if it were a regu
 
 #### 1) Identity Service- Provides a unique identity to a peer
 ```JS
-import Identity from "../../servicesLayer/identity/identity.js";
+import Identity from "dsf-toolkit/servicesLayer/identity/identity.js";
 
 const identity = new Identity({
     static:true, //same identity on restart, false- new identity each time,
     id:"A" //you can override id
 }).getIdentity()
+
+console.log(identity)
+```
+```TERMINAL
+>  node app.js
+{ id: 'A' }
 ```
 
 #### 2) Communication Stack- For communicating between peers via messages
 ```JS
-import Communication from "../../messagingLayer/communication/hyperswarm/hyperswarm.js";
-import Queue from "../../messagingLayer/queuing/bypassQueue/bypassQueue.js";
-import Router from "../../protocolLayer/routing/routing.js";
+import Communication from "dsf-toolkit/messagingLayer/communication/hyperswarm/hyperswarm.js";
+import Queue from "dsf-toolkit/messagingLayer/queuing/bypassQueue/bypassQueue.js";
+import Router from "dsf-toolkit/protocolLayer/routing/routing.js";
 
 //defining custom topology
 let topology = {
@@ -53,7 +59,7 @@ let router = new Router({
 
 #### 3) Leader Election- electing k leaders
 ```JS
-import Election from "../../servicesLayer/election/election.js"
+import Election from "dsf-toolkit/servicesLayer/election/election.js"
 
 let election = new Election({
     identity:identity,
@@ -67,9 +73,17 @@ setTimeout(async()=>{
 },30000) //we wait for the peers to connect
 ```
 
+```TERMINAL
+>  node app.js
+initiator sees result  {
+  electionId: '01KE4WTG8PNXNMNQSSH18E0T0Y',
+  elected: [ 'F', 'E', 'B' ]
+}
+```
+
 #### 4) Load Balancer- Peer to peer load balancing
 ```JS
-import LoadBalancer from "../../servicesLayer/loadBalancer/loadBalancer.js";
+import LoadBalancer from "dsf-toolkit/servicesLayer/loadBalancer/loadBalancer.js";
 
 let loadBalancer = new LoadBalancer({
     identity: identity,
@@ -101,7 +115,7 @@ setInterval(async()=>{
 
 #### 5) RateLimiter- drops excess messages
 ```JS
-import RateLimiter from "../../servicesLayer/rateLimiter/rateLimiter.js";
+import RateLimiter from "dsf-toolkit/servicesLayer/rateLimiter/rateLimiter.js";
 
 let rateLimiter = new RateLimiter({
     adapter:loadBalancer,
@@ -129,7 +143,7 @@ setInterval(async()=>{
 
 #### 6) Throttler- queues excess messages
 ```JS
-import Throttler from "../../servicesLayer/throttler/throttler.js"
+import Throttler from "dsf-toolkit/servicesLayer/throttler/throttler.js"
 
 let throttler = new Throttler({
     adapter:loadBalancer,
@@ -152,7 +166,7 @@ setInterval(async()=>{
 
 #### 7) Local Storage- A key-value storage
 ```JS
-import LocalStorage from "../../servicesLayer/localStorage/localStorage.js";
+import LocalStorage from "dsf-toolkit/servicesLayer/localStorage/localStorage.js";
 
 const localStorage = new LocalStorage({
     identifier: "USERS" // define scope/context
@@ -176,3 +190,4 @@ console.log(localStorage.get("alice"));
 4) cache
 5) firewall
 6) container orchestration
+
