@@ -48,7 +48,7 @@ let topology = {
 let communication = new Communication({
     identity:identity,
     topic:"yourUniqueId",
-    allowedNeighbours:new Set(topology["A"]) //optional
+    allowedNeighbours:new Set(topology[identity.id]) //optional
 })
 
 //queuing adapter
@@ -195,5 +195,6 @@ console.log(localStorage.get("alice"));
 4) cache
 5) firewall
 6) container orchestration
+
 
 
