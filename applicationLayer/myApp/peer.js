@@ -1,6 +1,6 @@
 //imports
 import Communication from "../../messagingLayer/communication/hyperswarm/hyperswarm.js";
-import Queue from "../../messagingLayer/queuing/bypassQueue/byassQueue.js";
+import Queue from "../../messagingLayer/queuing/bypassQueue/bypassQueue.js";
 import Router from "../../protocolLayer/routing/routing.js";
 import LoadBalancer from "../../servicesLayer/loadBalancer/loadBalancer.js";
 import RateLimiter from "../../servicesLayer/rateLimiter/rateLimiter.js";
@@ -51,8 +51,11 @@ let loadBalancer = new LoadBalancer({
     identity: identity,
     callback:async(request)=>{
         //simulating a server that takes 10 seconds to process a request
-        await delay(10000)
-        return { message: "some response" };
+        return new Promise((res, rej)=>{
+            setTimeout(()=>{
+                res({message:"some response"})
+            },10000)
+        })
     },
     adapter:router
 });
@@ -93,7 +96,7 @@ if(id == "A"){
         }else{
             console.log("[APP] request was rate limited and dropped")
         }
-    },50) //an interval of 50 seconds results in 20 req/sec
+    },50) //an interval of 50 milliseconds results in 20 req/sec
 }
 
 
