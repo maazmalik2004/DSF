@@ -10,8 +10,7 @@ A framework for building intuitive distributed applications as if it were a regu
 >  npm install dsf-toolkit
 ```
 
-### Building Your Stack
-
+### Building Your Stack- Run the same application on different machines with different peer IDs but same topic(communication stack, your unique string)
 #### 1) Identity Service- Provides a unique identity to a peer
 ```JS
 import Identity from "dsf-toolkit/servicesLayer/identity/identity.js";
@@ -195,6 +194,7 @@ console.log(localStorage.get("alice"));
 4) cache
 5) firewall
 6) container orchestration
+
 
 
 
