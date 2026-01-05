@@ -1,6 +1,6 @@
 {
   "name": "dsf-toolkit",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A framework for building distributed applications",
   "main": "index.js",
   "scripts": {
