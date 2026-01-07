@@ -194,6 +194,7 @@ console.log(localStorage.get("alice"));
 4) cache
 5) firewall
 6) container orchestration
+7) batching
 
 
 
